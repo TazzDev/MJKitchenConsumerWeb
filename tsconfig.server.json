@@ -12,5 +12,5 @@
     "types": ["@cloudflare/workers-types"],
     "tsBuildInfoFile": "./node_modules/.tmp/server.tsbuildinfo"
   },
-  "include": ["functions", "server", "src/shared", "vite.config.ts"]
+  "include": ["server", "src/shared", "vite.config.ts"]
 }
