@@ -4,6 +4,11 @@ import type { MealDate, MealPortions, Product, ShopInfo, Slot } from '../src/sha
 
 export interface Env {
   DB: D1Database
+  /** Optional R2 bucket for payment screenshots (see docs/cloudflare-setup.md). */
+  SCREENSHOTS?: R2Bucket
+  /** Worker secrets, set in the Cloudflare dashboard. All optional. */
+  RESEND_API_KEY?: string
+  TURNSTILE_SECRET?: string
 }
 
 type Row = Record<string, unknown>
@@ -25,6 +30,8 @@ export function shopInfo(s: Record<string, string>): ShopInfo {
     freeDeliveryAbovePaise: free ? Number(free) : null,
     mealCutoffTime: s.meal_cutoff_time || '20:00',
     mealMinDaysAhead: Math.max(1, Number(s.meal_min_days_ahead) || 1),
+    orderingOpen: Boolean(s.upi_id?.trim() && s.upi_payee_name?.trim()),
+    turnstileSiteKey: s.turnstile_site_key?.trim() || null,
   }
 }
 

@@ -64,6 +64,16 @@ export function Footer({ shop }: { shop: ShopInfo | null }) {
             </a>
           )}
         </div>
+        <a
+          href="/track"
+          onClick={(e) => {
+            e.preventDefault()
+            navigate('/track')
+          }}
+          className="text-sm font-semibold text-forest underline underline-offset-4"
+        >
+          Find my order
+        </a>
         <p className="font-script text-2xl text-forest">Real ingredients. Happier days.</p>
         <div className="space-y-1 text-xs leading-relaxed">
           <p>Homemade Kerala-style pickles and meals, delivered in Hyderabad.</p>
