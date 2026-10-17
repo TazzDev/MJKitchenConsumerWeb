@@ -28,7 +28,9 @@ export function App() {
 
   // Remember where the visitor came from (?src=ig) for the order record.
   useEffect(() => {
-    const src = new URLSearchParams(window.location.search).get('src')
+    // Instagram adds utm_source=ig to bio links by itself.
+    const q = new URLSearchParams(window.location.search)
+    const src = q.get('src') ?? q.get('utm_source')
     if (src) {
       try {
         sessionStorage.setItem('mjk.src', src.slice(0, 20))

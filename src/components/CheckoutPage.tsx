@@ -9,6 +9,7 @@ import { rupees } from '../shared/money'
 import { normalisePhone, PHONE_RE } from '../shared/orders'
 import { PINCODE_RE } from '../shared/quote'
 import type { MenuResponse, Quote, Slot } from '../shared/types'
+import { browserName, inApp } from '../inapp'
 import { useTurnstile } from '../turnstile'
 import { Notice } from './Layout'
 
@@ -92,6 +93,15 @@ export function CheckoutPage({ menu }: { menu: MenuResponse }) {
     if (!quote?.ok) return
     if (!menu.shop.orderingOpen) return setSubmitted(true)
     if (turnstile.enabled && !turnstile.token) {
+      if (turnstile.failed) {
+        turnstile.reset()
+        setOrderError(
+          inApp
+            ? `The security check didn't load in Instagram's browser. Tap Place order again in a few seconds. If it keeps failing, open this page in ${browserName} (tap ••• at the top right).`
+            : "The security check didn't load. Check your internet and tap Place order again in a few seconds.",
+        )
+        return
+      }
       setOrderError('Just a moment, we are running a quick security check. Tap Place order again in a second.')
       return
     }
