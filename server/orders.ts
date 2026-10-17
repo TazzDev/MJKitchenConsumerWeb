@@ -18,7 +18,8 @@ import {
   type OrderView,
 } from '../src/shared/orders'
 import { buildQuote, PINCODE_RE, slotLabel } from '../src/shared/quote'
-import type { Problem, Quote, Slot } from '../src/shared/types'
+import type { KitchenDay } from '../src/shared/admin'
+import type { Category, Problem, Quote, Slot } from '../src/shared/types'
 import { cutoffRule, loadMealPortions, loadProducts, loadSettings, loadZones, shopInfo, type Env } from './db'
 import { esc, linesToHtml, sendOwnerEmail } from './email'
 
@@ -26,7 +27,7 @@ type Row = Record<string, unknown>
 
 export class OrderError extends Error {
   constructor(
-    public status: 400 | 403 | 404 | 409 | 429 | 503,
+    public status: 400 | 401 | 403 | 404 | 409 | 429 | 503,
     message: string,
     public problems: Problem[] = [],
   ) {
@@ -300,7 +301,8 @@ export async function orderView(env: Env, row: Row): Promise<OrderView> {
  * Statements that move an order from `from` to `to`, logging the change. They
  * only take effect if the order is still in `from`, so running them twice, or
  * racing another change, is harmless. With `release`, booked meal portions and
- * tracked stock go back on sale (for expiry and cancellation).
+ * tracked stock go back on sale (for expiry and cancellation). `byUser` names
+ * the admin who made an owner change.
  */
 export function transition(
   db: D1Database,
@@ -311,6 +313,7 @@ export function transition(
   note: string,
   now: Date,
   release = false,
+  byUser: string | null = null,
 ): D1PreparedStatement[] {
   const at = nowIso(now)
   const still = `(SELECT status FROM orders WHERE id = ?1) = ?2`
@@ -336,10 +339,16 @@ export function transition(
         .bind(orderId, from),
     )
   }
+  // by_user only exists once migration 0003 has run, so customer and system
+  // changes leave it out and keep working on an older database.
   out.push(
-    db
-      .prepare(`INSERT INTO order_events (order_id, from_status, to_status, actor, note, at) SELECT ?1, ?2, ?3, ?4, ?5, ?6 WHERE ${still}`)
-      .bind(orderId, from, to, actor, note, at),
+    byUser
+      ? db
+          .prepare(`INSERT INTO order_events (order_id, from_status, to_status, actor, note, at, by_user) SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7 WHERE ${still}`)
+          .bind(orderId, from, to, actor, note, at, byUser)
+      : db
+          .prepare(`INSERT INTO order_events (order_id, from_status, to_status, actor, note, at) SELECT ?1, ?2, ?3, ?4, ?5, ?6 WHERE ${still}`)
+          .bind(orderId, from, to, actor, note, at),
     db.prepare(`UPDATE orders SET status = ?3, updated_at = ?4 WHERE id = ?1 AND status = ?2`).bind(orderId, from, to, at),
   )
   return out
@@ -449,8 +458,9 @@ export async function maybeSendKitchenSheet(env: Env, now = new Date()): Promise
   return sent ? date : null
 }
 
-export async function kitchenSheet(db: D1Database, date: string) {
-  const [orders, items, waiting] = await db.batch<Row>([
+/** What to cook for a date: dish totals per slot, and the orders behind them. */
+export async function kitchenDay(db: D1Database, date: string): Promise<KitchenDay> {
+  const [orders, items] = await db.batch<Row>([
     db.prepare(`SELECT * FROM orders WHERE delivery_date = ?1 AND status IN (SELECT value FROM json_each(?2)) ORDER BY delivery_slot, created_at`)
       .bind(date, JSON.stringify(COOKING)),
     db.prepare(
@@ -460,25 +470,46 @@ export async function kitchenSheet(db: D1Database, date: string) {
        WHERE o.delivery_date = ?1 AND o.status IN (SELECT value FROM json_each(?2))
        GROUP BY o.delivery_slot, i.product_name_snapshot, i.category ORDER BY o.delivery_slot, i.category DESC, name`,
     ).bind(date, JSON.stringify(COOKING)),
-    db.prepare(`SELECT public_code, customer_name, total_paise, utr FROM orders WHERE status = 'payment_submitted' ORDER BY created_at`),
   ])
-  if (orders.results.length === 0 && waiting.results.length === 0) return null
+  return {
+    date,
+    slots: (['lunch', 'dinner'] as Slot[])
+      .map((slot) => ({
+        slot,
+        dishes: items.results
+          .filter((r) => r.slot === slot)
+          .map((r) => ({ name: String(r.name), category: r.category as Category, qty: Number(r.qty), unverified: Number(r.unverified) })),
+      }))
+      .filter((s) => s.dishes.length > 0),
+    orders: orders.results.map((o) => ({
+      code: String(o.public_code),
+      slot: (o.delivery_slot as Slot | null) ?? null,
+      customerName: String(o.customer_name),
+      phone: String(o.phone),
+      totalPaise: Number(o.total_paise),
+      status: o.status as OrderStatus,
+      hasMeals: Boolean(o.has_meals),
+    })),
+  }
+}
+
+export async function kitchenSheet(db: D1Database, date: string) {
+  const [day, waiting] = await Promise.all([
+    kitchenDay(db, date),
+    db.prepare(`SELECT public_code, customer_name, total_paise, utr FROM orders WHERE status = 'payment_submitted' ORDER BY created_at`).all<Row>(),
+  ])
+  if (day.orders.length === 0 && waiting.results.length === 0) return null
 
   const lines: string[] = [`Kitchen sheet for ${formatDate(date)}`, '']
-  for (const slot of ['lunch', 'dinner'] as Slot[]) {
-    const rows = items.results.filter((r) => r.slot === slot)
-    if (rows.length === 0) continue
+  for (const { slot, dishes } of day.slots) {
     lines.push(slot === 'lunch' ? 'LUNCH' : 'DINNER')
-    for (const r of rows) {
-      const unv = Number(r.unverified)
-      lines.push(`  ${r.qty} × ${r.name}${unv ? ` (${unv} not yet verified)` : ''}`)
-    }
+    for (const r of dishes) lines.push(`  ${r.qty} × ${r.name}${r.unverified ? ` (${r.unverified} not yet verified)` : ''}`)
     lines.push('')
   }
-  if (orders.results.length) {
+  if (day.orders.length) {
     lines.push('Orders')
-    for (const o of orders.results) {
-      lines.push(`  ${o.public_code} · ${o.delivery_slot} · ${o.customer_name} · ${o.phone} · ${rupees(Number(o.total_paise))} · ${STATUS_LABEL[o.status as OrderStatus]}`)
+    for (const o of day.orders) {
+      lines.push(`  ${o.code} · ${o.slot} · ${o.customerName} · ${o.phone} · ${rupees(o.totalPaise)} · ${STATUS_LABEL[o.status]}`)
     }
     lines.push('')
   }

@@ -4,6 +4,7 @@ import { buildQuote, MAX_QTY } from '../src/shared/quote'
 import { SLOTS, type MenuResponse, type QuoteRequest, type Slot } from '../src/shared/types'
 import { ORDER_CODE_RE, normalisePhone, type CreateOrderRequest } from '../src/shared/orders'
 import { cutoffRule, loadMealDates, loadMealPortions, loadProducts, loadSettings, loadZones, shopInfo, type Env } from './db'
+import admin from './admin'
 import { sendOwnerEmail } from './email'
 import { createOrder, findOrder, newOrderEmail, OrderError, orderView, paidEmail, submitPayment, verifyTurnstile } from './orders'
 
@@ -16,6 +17,8 @@ app.onError((err, c) => {
 })
 
 app.get('/health', (c) => c.json({ ok: true }))
+
+app.route('/admin', admin)
 
 app.get('/menu', async (c) => {
   const db = c.env.DB
