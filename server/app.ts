@@ -13,6 +13,10 @@ const app = new Hono<{ Bindings: Env }>().basePath('/api')
 app.onError((err, c) => {
   if (err instanceof OrderError) return c.json({ error: err.message, problems: err.problems }, err.status)
   console.error(err)
+  // A deploy that ran ahead of its database migration: say how to fix it instead of a vague error.
+  if (/no such (table|column)/.test(String((err as Error).message))) {
+    return c.json({ error: 'The database needs updating. Run `npm run db:migrate:remote` (see docs/cloudflare-setup.md), then try again.' }, 500)
+  }
   return c.json({ error: 'Something went wrong. Please try again.' }, 500)
 })
 
