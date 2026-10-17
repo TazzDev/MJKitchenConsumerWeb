@@ -11,6 +11,7 @@ export function productImage(p: Product): string {
   if (p.imageUrl) return p.imageUrl
   if (p.icon === 'chicken') return '/icons/chicken.webp'
   if (p.icon === 'prawn') return '/icons/prawn.webp'
+  if (p.icon === 'fish') return '/icons/fish.svg'
   return p.category === 'pickle' ? '/icons/hl-jar.webp' : '/motifs/banana-leaf.webp'
 }
 
