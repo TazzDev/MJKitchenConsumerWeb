@@ -5,7 +5,7 @@ import { navigate } from '../router'
 import { qrCardPng } from '../qr'
 import { formatDate } from '../shared/dates'
 import { rupees } from '../shared/money'
-import { normaliseUtr, STATUS_LABEL, TIMELINE, UTR_RE, type OrderView } from '../shared/orders'
+import { normaliseUtr, STATUS_LABEL, TIMELINE, upiAppLink, UTR_RE, type OrderView, type UpiApp } from '../shared/orders'
 import type { ShopInfo } from '../shared/types'
 import { Notice } from './Layout'
 
@@ -131,6 +131,12 @@ export function OrderPage({ code, shop }: { code: string; shop: ShopInfo | null 
   )
 }
 
+const APPS: [UpiApp, string][] = [
+  ['gpay', 'GPay'],
+  ['phonepe', 'PhonePe'],
+  ['paytm', 'Paytm'],
+]
+
 function PaymentPanel({ order, code, accessKey, onPaid }: { order: OrderView; code: string; accessKey: string; onPaid: (o: OrderView) => void }) {
   const pay = order.payment!
   const amount = rupees(order.totalPaise)
@@ -184,10 +190,22 @@ function PaymentPanel({ order, code, accessKey, onPaid }: { order: OrderView; co
       </p>
 
       <Box title="1 · Pay">
-        <a href={pay.link} className="caps block rounded-2xl bg-forest py-4 text-center text-sm text-cream shadow active:bg-forest-dark">
-          Pay {amount} with UPI app
+        <p className="text-sm font-semibold text-forest">Pay {amount} with</p>
+        <div className="grid grid-cols-3 gap-2">
+          {APPS.map(([app, label]) => (
+            <a
+              key={app}
+              href={upiAppLink(pay.link, app)}
+              className="rounded-2xl bg-forest px-2 py-3.5 text-center text-sm font-semibold text-cream shadow active:bg-forest-dark"
+            >
+              {label}
+            </a>
+          ))}
+        </div>
+        <a href={pay.link} className="block rounded-2xl border border-forest py-3 text-center text-sm font-semibold text-forest">
+          Other UPI app
         </a>
-        <p className="text-xs">Opens GPay, PhonePe, Paytm or your bank's app with the amount filled in. If nothing opens, use the QR below.</p>
+        <p className="text-xs">Opens the app with the amount and order number filled in. If nothing opens, use the QR below.</p>
 
         <div className="mt-2 rounded-2xl border border-earth/15 bg-white/60 p-3 text-center">
           {qr ? (
