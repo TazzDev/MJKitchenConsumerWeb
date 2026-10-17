@@ -1,8 +1,19 @@
-# Cloudflare Pages config. See docs/cloudflare-setup.md.
+# Cloudflare Worker config. See docs/cloudflare-setup.md.
+# `name` must match the Worker's name in the Cloudflare dashboard.
 name = "mjkitchen"
-pages_build_output_dir = "dist"
+main = "server/worker.ts"
 compatibility_date = "2026-10-01"
 compatibility_flags = ["nodejs_compat"]
+
+# The built storefront. Unknown paths get index.html so /checkout etc. work on reload.
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[observability]
+enabled = true
 
 [[d1_databases]]
 binding = "DB"

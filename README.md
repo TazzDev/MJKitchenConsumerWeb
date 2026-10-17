@@ -2,7 +2,7 @@
 
 Mobile-first order site for [MJ Kitchen](https://instagram.com/mjkitchen_hyd), a Hyderabad home kitchen selling Kerala-style pickles and meals. Customers order from the Instagram link and pay by UPI; there is no payment gateway.
 
-Built on Cloudflare's free tier: Pages for the site, Pages Functions (Hono) for `/api`, D1 for data.
+Built on Cloudflare's free tier: one Worker serves the site as static assets and the `/api` routes (Hono), with D1 for data.
 
 ## What's here
 
@@ -18,7 +18,7 @@ Built on Cloudflare's free tier: Pages for the site, Pages Functions (Hono) for 
 | `src/` | React storefront (Vite, Tailwind) |
 | `src/shared/` | Code used by both the storefront and the API: types, IST dates and meal cutoff, pricing |
 | `server/` | API routes (`app.ts`) and database reads (`db.ts`) |
-| `functions/api/[[route]].ts` | Hands `/api/*` to the API on Cloudflare Pages |
+| `server/worker.ts` | Worker entry; `/api/*` runs here, everything else is served from `dist/` |
 | `migrations/` | D1 schema |
 | `seed/menu.sql` | Starting menu and delivery zones |
 | `public/` | Brand images, icons, web manifest |
@@ -30,7 +30,7 @@ Built on Cloudflare's free tier: Pages for the site, Pages Functions (Hono) for 
 npm install
 npm test            # unit tests (pricing, cutoff, dates)
 npm run typecheck
-npm run preview     # build and serve site + API locally on :8788 (see docs for the local DB)
+npm run preview     # build and serve site + API locally on :8787 (see docs for the local DB)
 ```
 
 ## API
