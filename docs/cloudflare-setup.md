@@ -23,7 +23,7 @@ npm run db:migrate:remote   # creates the tables
 npm run db:seed:remote      # loads seed/menu.sql (dishes, prices, placeholder zones)
 ```
 
-`db:seed:remote` replaces the whole menu and zone list, so only run it to reset. Once the admin area exists the menu is edited there instead.
+`db:seed:remote` replaces the whole menu and zone list, so only run it to reset. Edit the menu in the admin app (section 5) instead.
 
 ## 2. Create the Worker (in the dashboard, once)
 
@@ -92,30 +92,69 @@ npx wrangler d1 execute mjkitchen --remote --command "UPDATE settings SET value=
 
 You can also do it without a terminal: Cloudflare dashboard → **Storage & Databases → D1 → mjkitchen → Console**, and paste just the `UPDATE …` part. The QR code is drawn from the UPI ID, payee name, amount and order number for each order, so there is no QR image to swap. A business UPI ID (PhonePe Business, Paytm for Business, BharatPe) is changed the same way. Setting `upi_id` to empty switches online ordering off.
 
-The owner app (next stage) will have a Settings page for this.
+The admin app's **Settings** page (section 5) changes these too, without a terminal.
 
-## Confirming a payment before the owner app exists
+## 5. Admin app
 
-Check your UPI app for the amount and the order number in the note, then:
+The admin app is at **`/admin/`** on the same address (for example `https://mjkitchen.<your-subdomain>.workers.dev/admin/`). In it you see new orders, confirm or reject payments, mark orders shipped or delivered, see what to cook, and change the menu, meal days, delivery areas and charges, UPI details, alert email and FSSAI number.
+
+### Turn it on (once)
+
+1. Update the database, **before** merging the admin app to `main`:
+
+   ```sh
+   git pull
+   npm run db:migrate:remote    # applies 0003_admin.sql (safe to re-run)
+   ```
+
+2. Add the logins: Cloudflare → the `mjkitchen` Worker → **Settings → Variables and Secrets → Add** → type **Secret**, name `ADMIN_USERS`, value like this, then **Deploy**:
+
+   ```
+   Thomson:a-long-password, Mary:another-long-password
+   ```
+
+   One `name:password` pair per person, separated by commas. Passwords need at least 8 characters and can't contain commas. Names are what people type to sign in (capitals don't matter) and what the app shows next to every payment they confirm and every change they make.
+
+3. Open `/admin/` on your phone and sign in.
+
+### Put it on your phone's home screen
+
+- **Android (Chrome):** open `/admin/`, tap ⋮, then **Add to Home screen** (or **Install app**).
+- **iPhone (Safari):** open `/admin/`, tap Share, then **Add to Home Screen**.
+
+It opens full screen with the green MJ icon. You stay signed in for 30 days on that phone.
+
+### Add or remove a person
+
+Edit the `ADMIN_USERS` secret (Worker → **Settings → Variables and Secrets** → the pencil next to `ADMIN_USERS`), add or delete their `name:password` pair, and **Deploy**. Removing someone, or changing their password, signs them out straight away; everyone else stays signed in. The passwords never go in the code, because this repo is public.
+
+Ten wrong passwords from one network within 15 minutes pause sign-in from there for 15 minutes.
+
+### The FSSAI number
+
+Settings → Contact and legal → **FSSAI number**. The website footer shows "FSSAI Reg. No." only once it is filled in.
+
+### Confirming a payment without the app
+
+If you ever need to, the same change from a terminal:
 
 ```sh
 npx wrangler d1 execute mjkitchen --remote --command "UPDATE orders SET status='confirmed', updated_at=datetime('now') WHERE public_code='MJ-1017-4821' AND status='payment_submitted'"
 ```
 
-To see orders waiting for a check: `npx wrangler d1 execute mjkitchen --remote --command "SELECT public_code, customer_name, phone, total_paise/100 AS rupees, utr, delivery_date, delivery_slot FROM orders WHERE status='payment_submitted'"`.
-
 ## Running it on your computer
 
 ```sh
+echo 'ADMIN_USERS="Test:test-password"' > .dev.vars   # a local admin login (this file is not committed)
 npm run db:migrate:local && npm run db:seed:local && npm run db:payment:local   # local test database, once
 npm run preview                                     # builds, then serves site + API on http://localhost:8787
 ```
 
 For front-end work with instant reload, run `npx wrangler dev` in one terminal (API on port 8787) and `npm run dev` in another (site on port 5173, proxying `/api`).
 
-## Changing settings before the admin area exists
+## Settings reference
 
-Shop settings live in the `settings` table. For example, to set the WhatsApp contact number shown in the footer:
+Shop settings live in the `settings` table, and most of them are on the admin app's Settings page. From a terminal, for example, to set the WhatsApp contact number shown in the footer:
 
 ```sh
 npx wrangler d1 execute mjkitchen --remote --command "UPDATE settings SET value='919876543210' WHERE key='contact_whatsapp'"

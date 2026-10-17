@@ -9,6 +9,8 @@ export interface Env {
   /** Worker secrets, set in the Cloudflare dashboard. All optional. */
   RESEND_API_KEY?: string
   TURNSTILE_SECRET?: string
+  /** Admin logins, "name:password" pairs separated by commas (see server/auth.ts). */
+  ADMIN_USERS?: string
 }
 
 type Row = Record<string, unknown>
