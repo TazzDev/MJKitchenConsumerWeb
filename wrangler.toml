@@ -9,5 +9,5 @@ binding = "DB"
 database_name = "mjkitchen"
 # Replace with the id printed by `npx wrangler d1 create mjkitchen`.
 # The id is not a secret; it only works with your Cloudflare login.
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "ae173c12-d209-48ae-b350-3d8ff8d6896f"
 migrations_dir = "migrations"
