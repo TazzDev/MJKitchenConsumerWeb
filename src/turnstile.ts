@@ -34,6 +34,9 @@ export function useTurnstile(siteKey: string | null) {
   const ref = useRef<HTMLDivElement>(null)
   const widget = useRef<string | null>(null)
   const [token, setToken] = useState<string | null>(null)
+  // In-app browsers sometimes can't run the check; say so instead of waiting forever.
+  const [failed, setFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     if (!siteKey || !ref.current) return
@@ -45,23 +48,31 @@ export function useTurnstile(siteKey: string | null) {
           sitekey: siteKey,
           action: 'order',
           appearance: 'interaction-only',
-          callback: (t: string) => setToken(t),
+          callback: (t: string) => {
+            setToken(t)
+            setFailed(false)
+          },
           'expired-callback': () => setToken(null),
-          'error-callback': () => setToken(null),
+          'error-callback': () => {
+            setToken(null)
+            setFailed(true)
+          },
         })
       },
-      () => {},
+      () => !gone && setFailed(true),
     )
     return () => {
       gone = true
       if (widget.current) window.turnstile?.remove(widget.current)
       widget.current = null
     }
-  }, [siteKey])
+  }, [siteKey, attempt])
 
   const reset = () => {
     setToken(null)
+    setFailed(false)
     if (widget.current) window.turnstile?.reset(widget.current)
+    else setAttempt((n) => n + 1) // the script never loaded: try again
   }
-  return { ref, token, reset, enabled: Boolean(siteKey) }
+  return { ref, token, reset, failed: failed && !token, enabled: Boolean(siteKey) }
 }

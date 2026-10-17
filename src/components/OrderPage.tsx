@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { ApiError, findOrder, getOrder, submitPayment } from '../api'
 import { rememberOrder } from '../recent'
 import { navigate } from '../router'
+import { browserName, copyText, inApp, openInBrowserLink } from '../inapp'
 import { qrCardPng } from '../qr'
 import { formatDate } from '../shared/dates'
 import { rupees } from '../shared/money'
@@ -146,6 +147,8 @@ function PaymentPanel({ order, code, accessKey, onPaid }: { order: OrderView; co
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  const [qrTip, setQrTip] = useState(false)
+  const [appStuck, setAppStuck] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -153,13 +156,40 @@ function PaymentPanel({ order, code, accessKey, onPaid }: { order: OrderView; co
   }, [pay.link])
 
   const copy = async (label: string, text: string) => {
-    try {
-      await navigator.clipboard.writeText(text)
+    if (await copyText(text)) {
       setCopied(label)
       setTimeout(() => setCopied(null), 2000)
-    } catch {
+    } else {
       window.prompt('Copy this:', text)
     }
+  }
+
+  // Instagram's browser can't download files. Offer the share sheet where it
+  // has one (Save image), otherwise ask for a screenshot.
+  const saveQr = async (e: MouseEvent) => {
+    if (!inApp || !qr) return
+    e.preventDefault()
+    try {
+      const blob = await (await fetch(qr)).blob()
+      const file = new File([blob], `MJ-Kitchen-${order.code}.png`, { type: 'image/png' })
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file] })
+        return
+      }
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return
+    }
+    setQrTip(true)
+  }
+
+  // If the payment app didn't open, the page never went to the background.
+  // Say so, instead of leaving the customer tapping a dead button.
+  const openedApp = () => {
+    setAppStuck(false)
+    const t = setTimeout(() => document.visibilityState === 'visible' && setAppStuck(true), 2500)
+    const gone = () => document.visibilityState === 'hidden' && clearTimeout(t)
+    document.addEventListener('visibilitychange', gone, { once: true })
+    window.addEventListener('pagehide', () => clearTimeout(t), { once: true })
   }
 
   const cleanUtr = normaliseUtr(utr)
@@ -196,16 +226,24 @@ function PaymentPanel({ order, code, accessKey, onPaid }: { order: OrderView; co
             <a
               key={app}
               href={upiAppLink(pay.link, app)}
+              onClick={openedApp}
               className="rounded-2xl bg-forest px-2 py-3.5 text-center text-sm font-semibold text-cream shadow active:bg-forest-dark"
             >
               {label}
             </a>
           ))}
         </div>
-        <a href={pay.link} className="block rounded-2xl border border-forest py-3 text-center text-sm font-semibold text-forest">
+        <a href={pay.link} onClick={openedApp} className="block rounded-2xl border border-forest py-3 text-center text-sm font-semibold text-forest">
           Other UPI app
         </a>
         <p className="text-xs">Opens the app with the amount and order number filled in. If nothing opens, use the QR below.</p>
+        {appStuck && (
+          <Notice>
+            Didn't open? {inApp ? `Instagram's browser sometimes blocks payment apps. Open this page in ${browserName} and try again, or ` : ''}
+            {inApp ? 'pay' : 'Pay'} with the QR or UPI ID below.
+            {inApp && <OpenInBrowser />}
+          </Notice>
+        )}
 
         <div className="mt-2 rounded-2xl border border-earth/15 bg-white/60 p-3 text-center">
           {qr ? (
@@ -214,13 +252,21 @@ function PaymentPanel({ order, code, accessKey, onPaid }: { order: OrderView; co
             <div className="mx-auto aspect-[640/900] w-full max-w-64 animate-pulse rounded-xl bg-paper" />
           )}
           {qr && (
-            <a href={qr} download={`MJ-Kitchen-${order.code}.png`} className="caps mt-3 inline-block rounded-full bg-earth px-5 py-2 text-xs text-cream">
+            <a href={qr} download={`MJ-Kitchen-${order.code}.png`} onClick={saveQr} className="caps mt-3 inline-block rounded-full bg-earth px-5 py-2 text-xs text-cream">
               Save QR to gallery
             </a>
           )}
-          <p className="mt-2 text-xs">
-            Paying from this phone? Save the QR (or press and hold it), then open your UPI app → Scan → pick it from the gallery.
-          </p>
+          {qrTip ? (
+            <p className="mt-2 text-sm font-semibold text-forest">
+              Instagram's browser can't save images. Take a screenshot of this QR instead, then open your UPI app → Scan → pick the
+              screenshot from your gallery.
+            </p>
+          ) : (
+            <p className="mt-2 text-xs">
+              Paying from this phone? Save the QR {inApp ? '(or take a screenshot)' : '(or press and hold it)'}, then open your UPI app →
+              Scan → pick it from the gallery.
+            </p>
+          )}
         </div>
 
         <div className="mt-2 space-y-2 text-sm">
@@ -229,6 +275,11 @@ function PaymentPanel({ order, code, accessKey, onPaid }: { order: OrderView; co
           <CopyRow label="Note" value={order.code} copied={copied === 'code'} onCopy={() => copy('code', order.code)} />
         </div>
         <p className="text-xs">Paying by UPI ID? Please put the order number in the payment note so we can match it.</p>
+        {inApp && !appStuck && (
+          <p className="text-xs">
+            Trouble paying inside Instagram? <OpenInBrowser inline />
+          </p>
+        )}
       </Box>
 
       <Box title="2 · Tell us you've paid">
@@ -308,15 +359,16 @@ function ShareLink({ code }: { code: string }) {
   const [done, setDone] = useState(false)
   const url = window.location.href
   const share = async () => {
-    try {
-      if (navigator.share) await navigator.share({ title: `MJ Kitchen order ${code}`, url })
-      else {
-        await navigator.clipboard.writeText(url)
-        setDone(true)
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `MJ Kitchen order ${code}`, url })
+        return
+      } catch (e) {
+        if ((e as Error).name === 'AbortError') return
       }
-    } catch {
-      /* cancelled */
     }
+    if (await copyText(url)) setDone(true)
+    else window.prompt('Copy this link to check your order later:', url)
   }
   return (
     <button type="button" onClick={share} className="text-sm font-semibold text-forest underline underline-offset-4">
@@ -366,6 +418,21 @@ export function FindOrderPage({ initialCode = '' }: { initialCode?: string }) {
         </button>
       </form>
     </Page>
+  )
+}
+
+/** Leaves Instagram's browser for Chrome or Safari, keeping this order's link. */
+function OpenInBrowser({ inline = false }: { inline?: boolean }) {
+  const link = openInBrowserLink()
+  const tip = `tap ••• at the top right and choose Open in ${browserName === 'Safari' ? 'external browser' : 'Chrome'}`
+  if (!link) return <span> To open it, {tip}.</span>
+  return (
+    <>
+      <a href={link} className={inline ? 'font-semibold underline' : 'caps mt-2 block rounded-full bg-forest px-4 py-2 text-center text-xs text-cream'}>
+        Open in {browserName}
+      </a>
+      <span className="mt-1 block text-xs">If that doesn't work, {tip}.</span>
+    </>
   )
 }
 

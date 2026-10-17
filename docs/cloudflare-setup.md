@@ -70,7 +70,7 @@ You then get an email for every new order and every "I've paid". The first ones 
 
 ### Bot check (Turnstile, free, optional but recommended)
 
-1. Cloudflare dashboard → **Turnstile** → **Add widget**. Hostname: your `workers.dev` address (and later your own domain). Widget mode: **Managed**.
+1. Cloudflare dashboard → **Turnstile** → **Add widget**. Hostnames: `mjkitchen.site`, `www.mjkitchen.site` and your `workers.dev` address. Widget mode: **Managed**.
 2. Add the **secret key** as a Worker secret named `TURNSTILE_SECRET` (same place as above).
 3. Put the **site key** in the settings: `npx wrangler d1 execute mjkitchen --remote --command "UPDATE settings SET value='<site key>' WHERE key='turnstile_site_key'"`.
 
@@ -94,9 +94,13 @@ You can also do it without a terminal: Cloudflare dashboard → **Storage & Data
 
 The admin app's **Settings** page (section 5) changes these too, without a terminal.
 
+### Own domain (mjkitchen.site)
+
+The shop's public address is `https://mjkitchen.site`. It is attached in Cloudflare → **Workers & Pages → mjkitchen → Settings → Domains & Routes** as a **Custom domain** (`mjkitchen.site` and `www.mjkitchen.site`), which also creates the DNS record and certificate. The `workers.dev` address keeps working. Each hostname must also be listed on the Turnstile widget, or orders on it fail the security check.
+
 ## 5. Admin app
 
-The admin app is at **`/admin/`** on the same address (for example `https://mjkitchen.<your-subdomain>.workers.dev/admin/`). In it you see new orders, confirm or reject payments, mark orders shipped or delivered, see what to cook, and change the menu, meal days, delivery areas and charges, UPI details, alert email and FSSAI number.
+The admin app is at **`/admin/`** on the same address (`https://mjkitchen.site/admin/`). In it you see new orders, confirm or reject payments, mark orders shipped or delivered, see what to cook, and change the menu, meal days, delivery areas and charges, UPI details, alert email and FSSAI number.
 
 ### Turn it on (once)
 
