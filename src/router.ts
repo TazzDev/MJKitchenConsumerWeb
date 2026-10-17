@@ -9,9 +9,12 @@ export function usePath(): string {
   return useSyncExternalStore(subscribe, () => window.location.pathname)
 }
 
-export function navigate(path: string) {
+/** Go to `path`, keeping the current query string unless `path` brings its own. */
+export function navigate(path: string, { replace = false } = {}) {
   if (path === window.location.pathname) return
-  window.history.pushState(null, '', path + window.location.search)
+  const url = path.includes('?') ? path : path + window.location.search
+  if (replace) window.history.replaceState(null, '', url)
+  else window.history.pushState(null, '', url)
   window.dispatchEvent(new PopStateEvent('popstate'))
   window.scrollTo(0, 0)
 }

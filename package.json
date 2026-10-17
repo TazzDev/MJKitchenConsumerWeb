@@ -13,19 +13,23 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "db:seed:local": "wrangler d1 execute mjkitchen --local --file=seed/menu.sql",
-    "db:seed:remote": "wrangler d1 execute mjkitchen --remote --file=seed/menu.sql"
+    "db:seed:remote": "wrangler d1 execute mjkitchen --remote --file=seed/menu.sql",
+    "db:payment:local": "wrangler d1 execute mjkitchen --local --file=seed/payment.sql",
+    "db:payment:remote": "wrangler d1 execute mjkitchen --remote --file=seed/payment.sql"
   },
   "dependencies": {
     "@fontsource-variable/montserrat": "^5.3.0",
     "@fontsource/allura": "^5.3.0",
     "@fontsource/dm-serif-display": "^5.3.0",
     "hono": "^4.13.13",
+    "qrcode": "^1.5.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261016.1",
     "@tailwindcss/vite": "^4.3.3",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",

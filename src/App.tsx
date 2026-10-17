@@ -5,6 +5,7 @@ import { CartBar, CartSheet } from './components/CartSheet'
 import { CheckoutPage } from './components/CheckoutPage'
 import { Footer, Header, Notice } from './components/Layout'
 import { MenuPage } from './components/MenuPage'
+import { FindOrderPage, OrderPage } from './components/OrderPage'
 import { cartCount } from './menu'
 import { usePath } from './router'
 import type { MenuResponse } from './shared/types'
@@ -15,6 +16,9 @@ export function App() {
   const [menu, setMenu] = useState<MenuResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [cartOpen, setCartOpen] = useState(false)
+  // Order pages work even if the menu can't load.
+  const orderCode = path.startsWith('/order/') ? decodeURIComponent(path.slice('/order/'.length)) : null
+  const shopping = !orderCode && path !== '/track' && path !== '/checkout'
 
   const load = () => {
     setError(null)
@@ -38,7 +42,11 @@ export function App() {
     <div className="flex min-h-dvh flex-col">
       <Header count={cartCount(cart)} onCart={() => setCartOpen(true)} />
       <main className="flex-1">
-        {error ? (
+        {orderCode ? (
+          <OrderPage key={orderCode} code={orderCode} shop={menu?.shop ?? null} />
+        ) : path === '/track' ? (
+          <FindOrderPage />
+        ) : error ? (
           <div className="mx-auto max-w-xl px-4 py-10">
             <Notice tone="error">
               {error}{' '}
@@ -56,7 +64,7 @@ export function App() {
         )}
       </main>
       <Footer shop={menu?.shop ?? null} />
-      {menu && path !== '/checkout' && <CartBar menu={menu} onOpen={() => setCartOpen(true)} />}
+      {menu && shopping && <CartBar menu={menu} onOpen={() => setCartOpen(true)} />}
       {menu && <CartSheet menu={menu} open={cartOpen} onClose={() => setCartOpen(false)} />}
     </div>
   )

@@ -1,21 +1,16 @@
 import { cloneElement, useEffect, useId, useState, type ReactElement, type ReactNode } from 'react'
-import { getQuote } from '../api'
+import { ApiError, createOrder, getQuote } from '../api'
 import { cartStore, draftStore, useCart, type CheckoutDraft } from '../cart'
 import { cartLines, indexVariants } from '../menu'
+import { rememberOrder } from '../recent'
 import { navigate } from '../router'
 import { formatDate } from '../shared/dates'
 import { rupees } from '../shared/money'
+import { normalisePhone, PHONE_RE } from '../shared/orders'
 import { PINCODE_RE } from '../shared/quote'
 import type { MenuResponse, Quote, Slot } from '../shared/types'
+import { useTurnstile } from '../turnstile'
 import { Notice } from './Layout'
-
-export const PHONE_RE = /^[6-9]\d{9}$/
-
-/** "+91 98765 43210", "098765-43210" → "9876543210" */
-export function normalisePhone(raw: string): string {
-  const digits = raw.replace(/\D/g, '')
-  return digits.length > 10 ? digits.replace(/^(91|0)/, '') : digits
-}
 
 type Errors = Partial<Record<keyof CheckoutDraft, string>>
 
@@ -35,6 +30,9 @@ export function CheckoutPage({ menu }: { menu: MenuResponse }) {
   const [quote, setQuote] = useState<Quote | null>(null)
   const [quoteError, setQuoteError] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
+  const [placing, setPlacing] = useState(false)
+  const [orderError, setOrderError] = useState<string | null>(null)
+  const turnstile = useTurnstile(menu.shop.orderingOpen ? menu.shop.turnstileSiteKey : null)
   const lines = cartLines(cart, indexVariants(menu), menu.mealDates)
   const hasMeals = lines.some((l) => l.product.category === 'meal')
   const pin = draft.pincode.trim()
@@ -92,7 +90,46 @@ export function CheckoutPage({ menu }: { menu: MenuResponse }) {
       return
     }
     if (!quote?.ok) return
-    setSubmitted(true)
+    if (!menu.shop.orderingOpen) return setSubmitted(true)
+    if (turnstile.enabled && !turnstile.token) {
+      setOrderError('Just a moment, we are running a quick security check. Tap Place order again in a second.')
+      return
+    }
+    setPlacing(true)
+    setOrderError(null)
+    let src = ''
+    try {
+      src = sessionStorage.getItem('mjk.src') ?? ''
+    } catch {
+      /* ignore */
+    }
+    createOrder({
+      items: cart.items,
+      mealDate: hasMeals ? (cart.mealDate ?? undefined) : undefined,
+      mealSlot: hasMeals ? (cart.mealSlot ?? undefined) : undefined,
+      name: draft.name,
+      phone: normalisePhone(draft.phone),
+      address: draft.address,
+      landmark: draft.landmark,
+      pincode: pin,
+      notes: draft.notes,
+      source: src,
+      turnstileToken: turnstile.token ?? undefined,
+    }).then(
+      (o) => {
+        rememberOrder(o.code, o.key)
+        draftStore.save({ ...draft, notes: '' })
+        navigate(`/order/${o.code}?k=${encodeURIComponent(o.key)}`, { replace: true })
+        cartStore.clear()
+      },
+      (e: Error) => {
+        setPlacing(false)
+        turnstile.reset()
+        setOrderError(e.message)
+        // Prices or portions changed under us: refresh the summary.
+        if (e instanceof ApiError && e.problems.length) setQuote((q) => (q ? { ...q, ok: false, problems: e.problems } : q))
+      },
+    )
   }
 
   return (
@@ -207,6 +244,9 @@ export function CheckoutPage({ menu }: { menu: MenuResponse }) {
           </Notice>
         )}
 
+        {orderError && <Notice tone="error">{orderError}</Notice>}
+        <div ref={turnstile.ref} />
+
         {submitted ? (
           <Notice>
             <strong>Thanks! Online ordering opens very soon.</strong> This is a preview, so orders and UPI payment aren't switched on yet.
@@ -214,10 +254,10 @@ export function CheckoutPage({ menu }: { menu: MenuResponse }) {
         ) : (
           <button
             type="submit"
-            disabled={!!quote && !quote.ok && !!PINCODE_RE.test(pin)}
+            disabled={placing || (!!quote && !quote.ok && !!PINCODE_RE.test(pin))}
             className="caps w-full rounded-2xl bg-forest py-4 text-sm text-cream shadow active:bg-forest-dark disabled:opacity-40"
           >
-            Place order{quote?.ok ? ` · ${rupees(quote.totalPaise)}` : ''}
+            {placing ? 'Placing order…' : `Place order${quote?.ok ? ` · ${rupees(quote.totalPaise)}` : ''}`}
           </button>
         )}
         <p className="text-center text-xs">You'll pay by UPI on the next step. Your order is confirmed once we see your payment.</p>

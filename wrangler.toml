@@ -22,3 +22,15 @@ database_name = "mjkitchen"
 # The id is not a secret; it only works with your Cloudflare login.
 database_id = "ae173c12-d209-48ae-b350-3d8ff8d6896f"
 migrations_dir = "migrations"
+
+# Every 15 minutes: expire unpaid orders and, once a date's ordering closes,
+# email the kitchen sheet (server/worker.ts → scheduled()).
+[triggers]
+crons = ["*/15 * * * *"]
+
+# Payment screenshots (optional). Create the bucket first
+# (`npx wrangler r2 bucket create mjkitchen-screenshots`), then uncomment.
+# Until then the "I've paid" step just hides the screenshot picker.
+# [[r2_buckets]]
+# binding = "SCREENSHOTS"
+# bucket_name = "mjkitchen-screenshots"

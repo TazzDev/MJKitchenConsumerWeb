@@ -35,6 +35,10 @@ export interface ShopInfo {
   freeDeliveryAbovePaise: number | null
   mealCutoffTime: string
   mealMinDaysAhead: number
+  /** False until a UPI ID and payee name are set; checkout then shows a preview notice. */
+  orderingOpen: boolean
+  /** Cloudflare Turnstile site key; null = bot check off. */
+  turnstileSiteKey: string | null
 }
 
 /** Portions left per meal product, for one date and slot. */
