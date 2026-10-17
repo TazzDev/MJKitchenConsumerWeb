@@ -1,0 +1,50 @@
+@import 'tailwindcss';
+
+/* Brand tokens from the MJ Kitchen branding kit. Contrast on cream (#F2E5C8):
+   green 8.3:1, red 6.7:1, brown 6.9:1, gold 2.6:1 (gold is for shapes and large text only). */
+@theme {
+  --color-forest: #234734;
+  --color-forest-dark: #1a3627;
+  --color-spice: #8b2e20;
+  --color-cream: #f2e5c8;
+  --color-paper: #fbf5e6;
+  --color-earth: #6a432a;
+  --color-gold: #b8872e;
+
+  --font-serif: 'DM Serif Display', Georgia, serif;
+  --font-sans: 'Montserrat Variable', system-ui, sans-serif;
+  --font-script: 'Allura', cursive;
+}
+
+@layer base {
+  html {
+    background: var(--color-cream);
+    color: var(--color-earth);
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    font-family: var(--font-sans);
+    min-height: 100dvh;
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-gold);
+    outline-offset: 2px;
+  }
+}
+
+@utility caps {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-weight: 600;
+}
+
+@utility field {
+  display: block;
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--color-earth) 35%, transparent);
+  background: #fffdf7;
+  padding: 0.65rem 0.8rem;
+  font-size: 1rem; /* 16px stops iOS zooming into fields */
+  color: var(--color-earth);
+}
