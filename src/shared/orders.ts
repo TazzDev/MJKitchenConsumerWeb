@@ -61,6 +61,23 @@ export function upiLink(payee: UpiPayee, amountPaise: number, code: string): str
   return 'upi://pay?' + q.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')
 }
 
+export type UpiApp = 'gpay' | 'phonepe' | 'paytm'
+
+/**
+ * App-specific versions of the upi:// link, so the customer picks the app
+ * instead of whatever their phone has set as the default UPI handler (often
+ * WhatsApp). These are the schemes each app registers on Android and iPhone.
+ */
+const APP_SCHEMES: Record<UpiApp, string> = {
+  gpay: 'tez://upi/pay',
+  phonepe: 'phonepe://pay',
+  paytm: 'paytmmp://pay',
+}
+
+export function upiAppLink(link: string, app: UpiApp): string {
+  return link.replace(/^upi:\/\/pay/, APP_SCHEMES[app])
+}
+
 /**
  * When an unpaid order lapses: after the timeout, or when its meal date's
  * ordering closes, whichever is sooner.

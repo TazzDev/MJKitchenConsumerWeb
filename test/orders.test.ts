@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { closesAt } from '../src/shared/dates'
-import { expiresAt, normalisePhone, normaliseUtr, orderCode, ORDER_CODE_RE, paymentProof, upiLink, UTR_RE } from '../src/shared/orders'
+import { expiresAt, upiAppLink, normalisePhone, normaliseUtr, orderCode, ORDER_CODE_RE, paymentProof, upiLink, UTR_RE } from '../src/shared/orders'
 
 const rule = { cutoffTime: '20:00', minDaysAhead: 1 }
 
@@ -12,6 +12,15 @@ describe('upiLink', () => {
   })
   it('keeps paise', () => {
     expect(upiLink({ upiId: 'a@b', payeeName: 'A' }, 12550, 'MJ-0101-0001')).toContain('am=125.50')
+  })
+})
+
+describe('upiAppLink', () => {
+  const link = 'upi://pay?pa=a%40b&pn=A&am=1.00&cu=INR&tn=x'
+  it('swaps in each app scheme and keeps the payment details', () => {
+    expect(upiAppLink(link, 'gpay')).toBe('tez://upi/pay?pa=a%40b&pn=A&am=1.00&cu=INR&tn=x')
+    expect(upiAppLink(link, 'phonepe')).toBe('phonepe://pay?pa=a%40b&pn=A&am=1.00&cu=INR&tn=x')
+    expect(upiAppLink(link, 'paytm')).toBe('paytmmp://pay?pa=a%40b&pn=A&am=1.00&cu=INR&tn=x')
   })
 })
 
