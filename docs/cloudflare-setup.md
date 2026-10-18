@@ -72,7 +72,7 @@ You then get an email for every new order and every "I've paid". The first ones 
 
 1. Cloudflare dashboard → **Turnstile** → **Add widget**. Hostnames: `mjkitchen.site`, `www.mjkitchen.site` and your `workers.dev` address. Widget mode: **Managed**.
 2. Add the **secret key** as a Worker secret named `TURNSTILE_SECRET` (same place as above).
-3. Put the **site key** in the settings: `npx wrangler d1 execute mjkitchen --remote --command "UPDATE settings SET value='<site key>' WHERE key='turnstile_site_key'"`.
+3. Put the **site key** in admin → **Settings → Bot check (Turnstile)**. (Check it took: `/api/menu` shows it as `turnstileSiteKey`.)
 
 Set both, or neither: with only the secret set, every order is refused.
 
@@ -94,7 +94,7 @@ You can also do it without a terminal: Cloudflare dashboard → **Storage & Data
 
 The admin app's **Settings** page (section 5) changes these too, without a terminal.
 
-If every order fails with "Please wait a moment for the security check", the site key in the settings and the `TURNSTILE_SECRET` secret are from different widgets (or the site key is empty). Copy both again from the same widget in **Turnstile**: run the `UPDATE settings` command above with the site key, and `npx wrangler secret put TURNSTILE_SECRET` with the secret key. Workers Logs shows the reason as a `turnstile:` line.
+If every order fails with "Please wait a moment for the security check", the site key in the settings and the `TURNSTILE_SECRET` secret are from different widgets (or the site key is empty). Copy both again from the same widget in **Turnstile**: paste the site key in admin → Settings, and `npx wrangler secret put TURNSTILE_SECRET` with the secret key. Workers Logs shows the reason as a `turnstile:` line.
 
 ### Own domain (mjkitchen.site)
 

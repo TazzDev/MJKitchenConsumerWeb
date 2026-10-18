@@ -46,6 +46,12 @@ const SECTIONS: { title: string; intro?: string; fields: FieldDef[] }[] = [
       { key: 'fssai_number', label: 'FSSAI number', inputMode: 'numeric', hint: '14 digits. Shown in the website footer once filled in; hidden while empty.' },
     ],
   },
+  {
+    title: 'Bot check (Turnstile)',
+    intro:
+      'The site key from Cloudflare → Turnstile. Its secret key must be the TURNSTILE_SECRET Worker secret from the same widget, or every order is refused.',
+    fields: [{ key: 'turnstile_site_key', label: 'Turnstile site key', placeholder: '0x4AAAA…' }],
+  },
 ]
 
 export function SettingsPage({ name, onSignOut }: { name: string; onSignOut: () => void }) {
