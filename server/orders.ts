@@ -73,13 +73,18 @@ export function parseCustomer(b: Partial<CreateOrderRequest>) {
 
 export async function verifyTurnstile(env: Env, token: string | undefined, ip: string | null): Promise<boolean> {
   if (!env.TURNSTILE_SECRET) return true
-  if (!token) return false
+  // Reasons go to Workers Logs, so a rejected order can be traced to a key mix-up.
+  if (!token) {
+    console.warn('turnstile: no token sent (is turnstile_site_key set in settings?)')
+    return false
+  }
   const form = new FormData()
   form.append('secret', env.TURNSTILE_SECRET)
   form.append('response', token)
   if (ip) form.append('remoteip', ip)
   const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: form })
-  const out = (await res.json().catch(() => ({}))) as { success?: boolean }
+  const out = (await res.json().catch(() => ({}))) as { success?: boolean; 'error-codes'?: string[]; hostname?: string }
+  if (out.success !== true) console.warn(`turnstile: rejected (${(out['error-codes'] ?? []).join(', ') || `HTTP ${res.status}`})`)
   return out.success === true
 }
 
