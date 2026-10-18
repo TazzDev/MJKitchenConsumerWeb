@@ -4,6 +4,10 @@ name = "mjkitchen"
 main = "server/worker.ts"
 compatibility_date = "2026-10-01"
 compatibility_flags = ["nodejs_compat"]
+# Keep variables added in the Cloudflare dashboard (e.g. ADMIN_USERS saved as
+# "Text" instead of "Secret") when deploying. Without this, every
+# `wrangler deploy` deletes dashboard variables that aren't listed here.
+keep_vars = true
 
 # The built storefront. Unknown paths get index.html so /checkout etc. work on reload.
 [assets]
