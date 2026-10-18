@@ -45,7 +45,7 @@
     <!-- First-visit splash (see src/splash.ts). Inline so it paints before any JavaScript or font downloads. -->
     <script>
       try {
-        if (location.pathname === '/' && !localStorage.getItem('mjk.splash') && !matchMedia('(prefers-reduced-motion: reduce)').matches)
+        if (location.pathname === '/' && (/[?&]splash\b/.test(location.search) || (!localStorage.getItem('mjk.splash') && !matchMedia('(prefers-reduced-motion: reduce)').matches)))
           document.documentElement.classList.add('splash')
       } catch (e) {}
     </script>
