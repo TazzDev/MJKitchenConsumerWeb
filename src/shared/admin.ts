@@ -158,6 +158,7 @@ export const EDITABLE_SETTINGS = [
   'contact_phone',
   'instagram_handle',
   'fssai_number',
+  'turnstile_site_key',
 ] as const
 export type EditableSetting = (typeof EDITABLE_SETTINGS)[number]
 
@@ -181,6 +182,7 @@ export const SETTING_RULES: Record<EditableSetting, (v: string) => string | null
   contact_phone: (v) => (v === '' || /^\+91[6-9]\d{9}$/.test(v) ? null : '+91 and then the 10-digit number'),
   instagram_handle: (v) => (v === '' || /^[\w.]{1,30}$/.test(v) ? null : 'the handle without @'),
   fssai_number: (v) => (v === '' || /^\d{14}$/.test(v) ? null : 'the 14-digit FSSAI number'),
+  turnstile_site_key: (v) => (v === '' || /^0x[\w-]{10,60}$/.test(v) ? null : 'the site key from Cloudflare Turnstile, starting with 0x'),
 }
 
 export const PINCODE_LIST_RE = /^[1-9]\d{5}$/
