@@ -9,6 +9,7 @@ import { FindOrderPage, OrderPage } from './components/OrderPage'
 import { cartCount } from './menu'
 import { usePath } from './router'
 import { setMenuData, setPageMeta } from './seo'
+import { hideSplash } from './splash'
 import type { MenuResponse } from './shared/types'
 
 export function App() {
@@ -30,6 +31,10 @@ export function App() {
   useEffect(() => {
     if (menu) setMenuData(menu)
   }, [menu])
+  // Lift the first-visit splash once there is a menu (or an error) to show under it.
+  useEffect(() => {
+    if (menu || error || !shopping) hideSplash()
+  }, [menu, error, shopping])
 
   // Remember where the visitor came from (?src=ig) for the order record.
   useEffect(() => {
