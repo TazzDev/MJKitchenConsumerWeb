@@ -41,7 +41,7 @@ export function App() {
   }, [])
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="store flex min-h-dvh flex-col">
       <Header count={cartCount(cart)} onCart={() => setCartOpen(true)} />
       <main className="flex-1">
         {orderCode ? (

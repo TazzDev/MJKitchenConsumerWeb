@@ -31,7 +31,7 @@ export function Header({ count, onCart }: { count: number; onCart: () => void })
           <CartIcon className="size-5" />
           Cart
           {count > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 grid min-w-5 place-items-center rounded-full bg-gold px-1 text-xs font-bold text-forest-dark">
+            <span key={count} className="absolute -top-1.5 -right-1.5 grid animate-bump min-w-5 place-items-center rounded-full bg-gold px-1 text-xs font-bold text-forest-dark">
               {count}
             </span>
           )}
