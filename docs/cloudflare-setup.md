@@ -102,7 +102,7 @@ The shop's public address is `https://mjkitchen.site`. It is attached in Cloudfl
 
 ## 5. Admin app
 
-The admin app is at **`/admin/`** on the same address (`https://mjkitchen.site/admin/`). In it you see new orders, confirm or reject payments, mark orders shipped or delivered, see what to cook, and change the menu, meal days, delivery areas and charges, UPI details, alert email and FSSAI number.
+The admin app is at **`/admin/`** on the same address (`https://mjkitchen.site/admin/`). In it you see new orders (and get a phone alert for each one), confirm or reject payments, mark orders shipped or delivered, see what to cook, and change the menu, meal days, delivery areas and charges, UPI details, alert email and FSSAI number.
 
 ### Turn it on (once)
 
@@ -129,6 +129,28 @@ The admin app is at **`/admin/`** on the same address (`https://mjkitchen.site/a
 - **iPhone (Safari):** open `/admin/`, tap Share, then **Add to Home Screen**.
 
 It opens full screen with the green MJ icon. You stay signed in for 30 days on that phone.
+
+### Order alerts on phones (push notifications, free)
+
+Each person can get a phone notification for every new order and every "I've paid", even with the app closed. It uses the standard push service built into Chrome and iPhone, sent straight from the Worker: no extra service, no account, no keys or secrets to set, and no cost. The emails keep coming too.
+
+1. Update the database, **before** merging to `main`:
+
+   ```sh
+   git pull
+   npm run db:migrate:remote    # applies 0004_push.sql (safe to re-run)
+   ```
+
+   If the code is deployed first, orders still work; alerts just don't send until the migration runs.
+
+2. On each phone: open the admin app → **Settings → Order alerts on this phone → Turn on alerts**, allow notifications, then tap **Send a test**.
+   - **Android:** works in Chrome, installed or not.
+   - **iPhone:** needs iOS 16.4 or later, and only works in the **home-screen app**: in Safari tap Share → **Add to Home Screen**, open **MJ Admin** from that icon, sign in, then turn alerts on. A Safari tab or Instagram's browser can't get alerts.
+   - Clearing the browser's data or removing the app turns alerts off for that phone; turn them on again the same way.
+
+The **Getting alerts** list under the button shows whose phones are signed up. Tapping an alert opens that order. Battery saver on Android or a Focus mode on iPhone can delay or hide alerts.
+
+The push key pair is made the first time someone opens Settings and is stored in the `settings` table (`push_vapid`). Don't delete it: every phone would have to turn alerts on again.
 
 ### Add or remove a person
 

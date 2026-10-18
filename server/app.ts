@@ -6,6 +6,7 @@ import { ORDER_CODE_RE, normalisePhone, type CreateOrderRequest } from '../src/s
 import { cutoffRule, loadMealDates, loadMealPortions, loadProducts, loadSettings, loadZones, shopInfo, type Env } from './db'
 import admin from './admin'
 import { sendOwnerEmail } from './email'
+import { newOrderPush, paidPush, sendPush } from './push'
 import { createOrder, findOrder, newOrderEmail, OrderError, orderView, paidEmail, submitPayment, verifyTurnstile } from './orders'
 
 const app = new Hono<{ Bindings: Env }>().basePath('/api')
@@ -60,6 +61,7 @@ app.post('/orders', async (c) => {
   const order = await createOrder(c.env, req.items, req.mealDate, req.mealSlot, body)
   const url = statusUrl(c.req.url, order.code, order.key)
   c.executionCtx.waitUntil(sendOwnerEmail(c.env, order.settings, newOrderEmail(order, url)).catch(console.error))
+  c.executionCtx.waitUntil(sendPush(c.env, order.settings, new URL(c.req.url).origin, newOrderPush(order)).catch(console.error))
   return c.json({ code: order.code, key: order.key }, 201)
 })
 
@@ -82,6 +84,7 @@ app.post('/orders/:code/payment', async (c) => {
   const settings = await loadSettings(c.env.DB)
   const url = statusUrl(c.req.url, String(row.public_code), String(row.access_key))
   c.executionCtx.waitUntil(sendOwnerEmail(c.env, settings, paidEmail(fresh, String(fresh.utr ?? ''), Boolean(fresh.screenshot_key), url)).catch(console.error))
+  c.executionCtx.waitUntil(sendPush(c.env, settings, new URL(c.req.url).origin, paidPush(fresh, String(fresh.utr ?? ''))).catch(console.error))
   return c.json(await orderView(c.env, fresh))
 })
 

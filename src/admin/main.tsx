@@ -4,9 +4,12 @@ import '@fontsource/dm-serif-display/latin-400.css'
 import '@fontsource-variable/montserrat'
 import '../index.css'
 import { AdminApp } from './AdminApp'
+import { registerServiceWorker } from './push'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AdminApp />
   </StrictMode>,
 )
+
+registerServiceWorker()
