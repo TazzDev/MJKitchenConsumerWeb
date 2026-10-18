@@ -1,6 +1,7 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { SETTING_RULES, type EditableSetting } from '../../shared/admin'
 import { api } from '../api'
+import { blockedHelp, currentSubscription, deviceName, pushSupport, subscribe } from '../push'
 import { Button, Card, ErrorBox, Label, Loading, Page, Toggle, toast, useAction, useLoad, when } from '../ui'
 
 type Values = Record<EditableSetting, string>
@@ -24,7 +25,7 @@ const SECTIONS: { title: string; intro?: string; fields: FieldDef[] }[] = [
     ],
   },
   {
-    title: 'Order alerts',
+    title: 'Alert emails',
     fields: [{ key: 'alert_email', label: 'Alert email', inputMode: 'email', hint: 'New orders and "I’ve paid" emails go here. Separate more than one with commas.' }],
   },
   {
@@ -65,6 +66,7 @@ export function SettingsPage({ name, onSignOut }: { name: string; onSignOut: () 
       ) : (
         <div className="space-y-4">
           <ShopOpen values={s.data.settings} onSaved={(v) => s.setData({ settings: v })} />
+          <PushAlerts />
           {SECTIONS.map((sec) => (
             <Section key={sec.title} title={sec.title} intro={sec.intro} fields={sec.fields} values={s.data!.settings} onSaved={(v) => s.setData({ settings: v })} />
           ))}
@@ -88,6 +90,119 @@ export function SettingsPage({ name, onSignOut }: { name: string; onSignOut: () 
         </Button>
       </Card>
     </Page>
+  )
+}
+
+function PushAlerts() {
+  const support = pushSupport()
+  const server = useLoad(() => api.push(), [])
+  const [sub, setSub] = useState<PushSubscription | null | undefined>(undefined)
+  const { busy, run } = useAction()
+
+  useEffect(() => {
+    currentSubscription().then(setSub, () => setSub(null))
+  }, [])
+
+  // This phone is subscribed but the server lost it (e.g. it was turned off elsewhere): sign it up again.
+  const mine = sub ? server.data?.devices.find((d) => d.endpoint === sub.endpoint) : undefined
+  useEffect(() => {
+    if (sub && server.data && !mine) api.pushSubscribe(sub.toJSON(), deviceName()).then(() => server.reload(), console.error)
+  }, [sub, server.data, mine])
+
+  const turnOn = async () => {
+    const out = await run(
+      'on',
+      async () => {
+        const s = await subscribe(server.data!.publicKey)
+        await api.pushSubscribe(s.toJSON(), deviceName())
+        return s
+      },
+      'Alerts on for this phone',
+    )
+    if (out) {
+      setSub(out)
+      server.reload()
+    }
+  }
+  const turnOff = async () => {
+    if (!sub) return
+    const out = await run(
+      'off',
+      async () => {
+        await api.pushUnsubscribe(sub.endpoint)
+        await sub.unsubscribe()
+        return true
+      },
+      'Alerts off for this phone',
+    )
+    if (out) {
+      setSub(null)
+      server.reload()
+    }
+  }
+
+  let body: ReactNode
+  if (support === 'iphone-needs-home-screen') {
+    body = (
+      <p className="text-sm">
+        On iPhone, alerts only work in the home-screen app (iOS 16.4 or later). In <b>Safari</b>, tap Share → <b>Add to Home Screen</b>, open <b>MJ Admin</b>{' '}
+        from the icon, sign in, and come back here.
+      </p>
+    )
+  } else if (support === 'unsupported') {
+    body = <p className="text-sm">This browser can’t show alerts. Use Chrome on Android, or the home-screen app on iPhone.</p>
+  } else if (server.error) {
+    body = <ErrorBox error={server.error} onRetry={() => server.reload()} />
+  } else if (sub === undefined || !server.data) {
+    body = <Loading />
+  } else if (sub) {
+    body = (
+      <>
+        <p className="text-sm">
+          <b>On for this phone.</b> You’ll get a notification for every new order and every “I’ve paid”.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button busy={busy === 'test'} onClick={() => run('test', () => api.pushTest(sub.endpoint), 'Test sent: it should pop up in a few seconds')}>
+            Send a test
+          </Button>
+          <Button tone="plain" busy={busy === 'off'} onClick={turnOff}>
+            Turn off
+          </Button>
+        </div>
+      </>
+    )
+  } else if (Notification.permission === 'denied') {
+    body = <p className="text-sm">{blockedHelp()}</p>
+  } else {
+    body = (
+      <>
+        <p className="text-sm">Get a notification on this phone for every new order and every “I’ve paid”, even when the app is closed.</p>
+        <Button className="mt-3" busy={busy === 'on'} onClick={turnOn}>
+          Turn on alerts
+        </Button>
+      </>
+    )
+  }
+
+  const devices = server.data?.devices ?? []
+  return (
+    <Card>
+      <h2 className="mb-1 font-serif text-xl text-forest">Order alerts on this phone</h2>
+      {body}
+      {devices.length > 0 && (
+        <div className="mt-4 border-t border-earth/15 pt-3">
+          <p className="mb-1 text-xs font-semibold text-forest">Getting alerts</p>
+          <ul className="space-y-1 text-sm">
+            {devices.map((d) => (
+              <li key={d.endpoint}>
+                <b className="font-semibold">{d.user}</b> · {d.device || 'a phone'}
+                {d.endpoint === sub?.endpoint ? ' (this phone)' : ''}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </Card>
   )
 }
 

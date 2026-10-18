@@ -29,6 +29,7 @@ import { SLOTS, type Category, type Slot } from '../src/shared/types'
 import { clearCookie, createSession, findUser, parseUsers, passwordMatches, readSessionCookie, sessionCookie, verifySession, type AdminUser } from './auth'
 import { loadSettings, type Env } from './db'
 import { kitchenDay, OrderError, transition } from './orders'
+import { parseSubscription, sendPush, vapidKeys } from './push'
 
 type Row = Record<string, unknown>
 type AdminEnv = { Bindings: Env; Variables: { user: AdminUser } }
@@ -717,6 +718,75 @@ admin.put('/settings', async (c) => {
 admin.get('/log', async (c) => {
   const { results } = await c.env.DB.prepare('SELECT * FROM admin_log ORDER BY at DESC, rowid DESC LIMIT 50').all<Row>()
   return c.json({ entries: results.map((r) => ({ at: String(r.at), user: String(r.user), action: String(r.action), detail: String(r.detail) })) })
+})
+
+// ---------------------------------------------------------------------------
+// Order alerts on phones (Web Push, see server/push.ts)
+
+admin.get('/push', async (c) => {
+  const db = c.env.DB
+  const [vapid, { results }] = await Promise.all([
+    vapidKeys(db),
+    db.prepare('SELECT endpoint, user, device, created_at FROM push_subscriptions ORDER BY created_at').all<Row>(),
+  ])
+  return c.json({
+    publicKey: vapid.publicKey,
+    devices: results.map((r) => ({ endpoint: String(r.endpoint), user: String(r.user), device: String(r.device), since: String(r.created_at) })),
+  })
+})
+
+admin.post('/push/subscribe', async (c) => {
+  const db = c.env.DB
+  const b = ((await c.req.json().catch(() => null)) ?? {}) as { subscription?: unknown; device?: unknown; replaces?: unknown }
+  const sub = parseSubscription(b.subscription)
+  if (!sub) throw bad('This browser sent an alert sign-up we can’t use. Try again, or use Chrome or the home-screen app.')
+  const replaces = typeof b.replaces === 'string' && b.replaces !== sub.endpoint ? b.replaces : null
+  const old = replaces ? await db.prepare('SELECT device FROM push_subscriptions WHERE endpoint = ?').bind(replaces).first<{ device: string }>() : null
+  const device = old?.device ?? (typeof b.device === 'string' ? b.device.slice(0, 60) : '')
+  const user = c.get('user').name
+  const stmts = [
+    db
+      .prepare(
+        `INSERT INTO push_subscriptions (endpoint, p256dh, auth, user, device, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT(endpoint) DO UPDATE SET p256dh = ?2, auth = ?3, user = ?4, device = ?5`,
+      )
+      .bind(sub.endpoint, sub.keys.p256dh, sub.keys.auth, user, device, new Date().toISOString()),
+  ]
+  // The browser renewed its subscription: drop the old one.
+  if (replaces) stmts.push(db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').bind(replaces))
+  else stmts.push(logStmt(db, user, 'Turned on order alerts', device || 'a phone'))
+  await db.batch(stmts)
+  return c.json({ ok: true })
+})
+
+admin.post('/push/unsubscribe', async (c) => {
+  const db = c.env.DB
+  const b = ((await c.req.json().catch(() => null)) ?? {}) as { endpoint?: unknown }
+  if (typeof b.endpoint !== 'string') throw bad('Missing endpoint.')
+  const row = await db.prepare('SELECT device FROM push_subscriptions WHERE endpoint = ?').bind(b.endpoint).first<{ device: string }>()
+  if (row) {
+    await db.batch([
+      db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').bind(b.endpoint),
+      logStmt(db, c.get('user').name, 'Turned off order alerts', row.device || 'a phone'),
+    ])
+  }
+  return c.json({ ok: true })
+})
+
+/** A test alert to one phone (the one asking), to check alerts get through. */
+admin.post('/push/test', async (c) => {
+  const b = ((await c.req.json().catch(() => null)) ?? {}) as { endpoint?: unknown }
+  if (typeof b.endpoint !== 'string') throw bad('Missing endpoint.')
+  const user = c.get('user').name
+  const result = await sendPush(
+    c.env,
+    await loadSettings(c.env.DB),
+    new URL(c.req.url).origin,
+    { title: 'Test alert · MJ Kitchen', body: `Alerts work on this phone, ${user}. New orders will show up like this.`, url: '/admin/#/settings', tag: 'test' },
+    [b.endpoint],
+  )
+  if (result.sent === 0) throw new OrderError(503, 'The test alert didn’t go through. Turn alerts off and on again on this phone.')
+  return c.json({ ok: true })
 })
 
 export default admin

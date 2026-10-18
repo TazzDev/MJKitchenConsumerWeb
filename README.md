@@ -27,6 +27,7 @@ Built on Cloudflare's free tier: one Worker serves the site as static assets and
 | `src/shared/` | Code used by both the storefront and the API: types, IST dates and meal cutoff, pricing |
 | `server/` | API routes (`app.ts`) and database reads (`db.ts`) |
 | `server/worker.ts` | Worker entry; `/api/*` runs here, everything else is served from `dist/` |
+| `server/push.ts`, `public/admin/sw.js` | Order alerts on admins' phones (Web Push, no third-party service) |
 | `migrations/` | D1 schema |
 | `seed/menu.sql` | Starting menu and delivery zones |
 | `seed/payment.sql` | UPI ID, payee name and alert email (settings; change any time) |

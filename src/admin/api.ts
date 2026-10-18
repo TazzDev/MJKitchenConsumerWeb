@@ -82,6 +82,10 @@ export const api = {
   settings: () => request<{ settings: Record<EditableSetting, string> }>('/settings'),
   saveSettings: (settings: Partial<Record<EditableSetting, string>>) =>
     request<{ settings: Record<EditableSetting, string> }>('/settings', send('PUT', { settings })),
+  push: () => request<{ publicKey: string; devices: PushDevice[] }>('/push'),
+  pushSubscribe: (subscription: PushSubscriptionJSON, device: string) => request<{ ok: true }>('/push/subscribe', send('POST', { subscription, device })),
+  pushUnsubscribe: (endpoint: string) => request<{ ok: true }>('/push/unsubscribe', send('POST', { endpoint })),
+  pushTest: (endpoint: string) => request<{ ok: true }>('/push/test', send('POST', { endpoint })),
   log: () => request<{ entries: { at: string; user: string; action: string; detail: string }[] }>('/log'),
 }
 
@@ -110,4 +114,11 @@ export interface ZoneBody {
   feePaise: number
   allowsMeals: boolean
   isActive: boolean
+}
+
+export interface PushDevice {
+  endpoint: string
+  user: string
+  device: string
+  since: string
 }
