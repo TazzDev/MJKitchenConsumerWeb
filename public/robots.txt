@@ -1,0 +1,8 @@
+User-agent: *
+Disallow: /admin/
+Disallow: /api/
+Disallow: /order/
+Disallow: /checkout
+Disallow: /track
+
+Sitemap: https://mjkitchen.site/sitemap.xml

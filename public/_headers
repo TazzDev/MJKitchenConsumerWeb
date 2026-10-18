@@ -7,3 +7,9 @@
 /admin/*
   X-Robots-Tag: noindex, nofollow
   X-Frame-Options: DENY
+/order/*
+  X-Robots-Tag: noindex
+/checkout
+  X-Robots-Tag: noindex
+/track
+  X-Robots-Tag: noindex
