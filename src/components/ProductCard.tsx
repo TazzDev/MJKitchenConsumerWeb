@@ -6,7 +6,18 @@ import { MAX_QTY } from '../shared/quote'
 import type { Product } from '../shared/types'
 import { FoodMark, Spice } from './icons'
 
-export function ProductCard({ product, portionsLeft, disabled }: { product: Product; portionsLeft?: number; disabled?: boolean }) {
+export function ProductCard({
+  product,
+  portionsLeft,
+  disabled,
+  index = 0,
+}: {
+  product: Product
+  portionsLeft?: number
+  disabled?: boolean
+  /** Position in the list, to stagger the entrance a little. */
+  index?: number
+}) {
   const cart = useCart()
   const [variantId, setVariantId] = useState(product.variants.find((v) => v.stock !== 0)?.id ?? product.variants[0].id)
   const variant = product.variants.find((v) => v.id === variantId) ?? product.variants[0]
@@ -16,7 +27,10 @@ export function ProductCard({ product, portionsLeft, disabled }: { product: Prod
   const cap = Math.min(MAX_QTY, variant.stock ?? MAX_QTY, isMeal ? (portionsLeft ?? 0) : MAX_QTY)
 
   return (
-    <article className={'flex gap-3 rounded-2xl border border-earth/15 bg-paper p-3 shadow-sm ' + (soldOut ? 'opacity-70' : '')}>
+    <article
+      className={'lift flex animate-rise gap-3 rounded-2xl border border-earth/15 bg-paper p-3 shadow-sm ' + (soldOut ? 'opacity-70' : '')}
+      style={{ animationDelay: `${Math.min(index, 6) * 50}ms` }}
+    >
       <div className="grid size-24 shrink-0 place-items-center overflow-hidden rounded-xl bg-cream">
         <img src={productImage(product)} alt="" width="96" height="96" loading="lazy" className={'size-20 object-contain mix-blend-multiply ' + (soldOut ? 'grayscale' : '')} />
       </div>
@@ -86,11 +100,11 @@ export function ProductCard({ product, portionsLeft, disabled }: { product: Prod
 
 export function Stepper({ qty, max, label, onChange }: { qty: number; max: number; label: string; onChange: (n: number) => void }) {
   return (
-    <div className="flex items-center rounded-full bg-forest text-cream shadow-sm">
+    <div className="flex animate-pop items-center rounded-full bg-forest text-cream shadow-sm">
       <button type="button" className="grid size-9 place-items-center text-lg" aria-label={`One less ${label}`} onClick={() => onChange(qty - 1)}>
         −
       </button>
-      <span className="min-w-6 text-center text-sm font-bold" aria-live="polite">
+      <span key={qty} className="min-w-6 animate-bump text-center text-sm font-bold" aria-live="polite">
         {qty}
       </span>
       <button

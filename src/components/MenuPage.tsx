@@ -100,10 +100,10 @@ export function MenuPage({ menu }: { menu: MenuResponse }) {
 
           {products.length === 0 && <p className="py-8 text-center">Nothing here right now. Please check back soon.</p>}
 
-          {products.map((p) => {
+          {products.map((p, i) => {
             const left = p.category === 'meal' ? portionsLeft(menu.mealDates, meal?.date ?? null, meal?.slot ?? null, p.id) : undefined
             if (p.category === 'meal' && left === undefined) return null
-            return <ProductCard key={p.id} product={p} portionsLeft={left} disabled={!shop.open} />
+            return <ProductCard key={p.id} product={p} portionsLeft={left} disabled={!shop.open} index={i} />
           })}
 
           {tab === 'meal' && meal && products.every((p) => portionsLeft(menu.mealDates, meal.date, meal.slot, p.id) === undefined) && (

@@ -14,6 +14,39 @@
   --font-serif: 'DM Serif Display', Georgia, serif;
   --font-sans: 'Montserrat Variable', system-ui, sans-serif;
   --font-script: 'Allura', cursive;
+
+  /* Small, one-shot motion for the storefront. All of it is switched off by prefers-reduced-motion below. */
+  --animate-pop: pop 240ms cubic-bezier(0.3, 1.4, 0.5, 1) backwards;
+  --animate-bump: bump 280ms ease-out;
+  --animate-rise: rise 380ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+
+  @keyframes pop {
+    from {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+  }
+  @keyframes bump {
+    40% {
+      transform: scale(1.3);
+    }
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes sheet-up {
+    from {
+      transform: translateY(100%);
+    }
+  }
 }
 
 @layer base {
@@ -47,4 +80,75 @@
   padding: 0.65rem 0.8rem;
   font-size: 1rem; /* 16px stops iOS zooming into fields */
   color: var(--color-earth);
+}
+
+/* Storefront feedback (the .store wrapper keeps it out of the admin app). Most visitors tap inside
+   Instagram's browser, so every button gets a quick press-down; hover only applies on devices with a
+   real pointer. Plain CSS transitions, so nothing extra to download. */
+@layer components {
+  .store :is(button, [role='tab'], a[class*='rounded']) {
+    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+    transition-duration: 180ms;
+    transition-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+  .store :is(button, a[class*='rounded']):not(:disabled):active {
+    transform: scale(0.96);
+    transition-duration: 80ms;
+  }
+  .store footer a:has(svg) {
+    transition: transform 180ms ease-out, opacity 180ms;
+  }
+  .store a.underline {
+    transition: text-decoration-color 180ms;
+  }
+  .store dialog[open] {
+    animation: sheet-up 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .store dialog[open]::backdrop {
+    animation: fade-in 320ms ease-out;
+  }
+}
+
+/* Unlayered so it wins over the bg-forest / border-forest utilities on hover. */
+@media (hover: hover) and (pointer: fine) {
+  .store :is(button, a).bg-forest:not(:disabled):hover {
+    background-color: var(--color-forest-dark);
+    box-shadow: 0 8px 18px -8px rgb(26 54 39 / 0.6);
+  }
+  .store :is(button, a).border-forest:not(.bg-forest):hover {
+    background-color: color-mix(in srgb, var(--color-forest) 8%, transparent);
+  }
+  .store :is([aria-checked='false'], [aria-selected='false']):not(:disabled):hover {
+    border-color: color-mix(in srgb, var(--color-forest) 60%, transparent);
+    background-color: #fffdf7;
+  }
+  .store header button:hover {
+    background-color: color-mix(in srgb, var(--color-cream) 12%, transparent);
+  }
+  .store footer a:has(svg):hover {
+    transform: translateY(-2px);
+    opacity: 0.8;
+  }
+  .store a.underline:hover {
+    text-decoration-color: var(--color-gold);
+  }
+  .store .lift {
+    transition: transform 220ms ease-out, box-shadow 220ms ease-out;
+  }
+  .store .lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 24px -14px rgb(106 67 42 / 0.45);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .store *,
+  .store *::backdrop {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+  .store :is(button, a, .lift) {
+    transform: none !important;
+  }
 }

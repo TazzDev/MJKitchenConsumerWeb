@@ -15,13 +15,13 @@ export function CartBar({ menu, onOpen }: { menu: MenuResponse; onOpen: () => vo
   if (count === 0) return null
   const subtotal = lines.reduce((s, l) => s + l.variant.pricePaise * l.qty, 0)
   return (
-    <div className="fixed inset-x-0 bottom-0 z-30 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <div className="fixed inset-x-0 bottom-0 z-30 animate-rise px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <button
         type="button"
         onClick={onOpen}
         className="mx-auto flex w-full max-w-3xl items-center justify-between rounded-2xl bg-forest px-5 py-3.5 text-cream shadow-lg active:bg-forest-dark"
       >
-        <span className="text-sm font-semibold">
+        <span key={subtotal} className="animate-[fade-in_300ms_ease-out] text-sm font-semibold">
           {count} item{count === 1 ? '' : 's'} · {rupees(subtotal)}
         </span>
         <span className="caps text-xs">View cart →</span>
