@@ -94,6 +94,8 @@ You can also do it without a terminal: Cloudflare dashboard → **Storage & Data
 
 The admin app's **Settings** page (section 5) changes these too, without a terminal.
 
+If every order fails with "Please wait a moment for the security check", the site key in the settings and the `TURNSTILE_SECRET` secret are from different widgets (or the site key is empty). Copy both again from the same widget in **Turnstile**: run the `UPDATE settings` command above with the site key, and `npx wrangler secret put TURNSTILE_SECRET` with the secret key. Workers Logs shows the reason as a `turnstile:` line.
+
 ### Own domain (mjkitchen.site)
 
 The shop's public address is `https://mjkitchen.site`. It is attached in Cloudflare → **Workers & Pages → mjkitchen → Settings → Domains & Routes** as a **Custom domain** (`mjkitchen.site` and `www.mjkitchen.site`), which also creates the DNS record and certificate. The `workers.dev` address keeps working. Each hostname must also be listed on the Turnstile widget, or orders on it fail the security check.
