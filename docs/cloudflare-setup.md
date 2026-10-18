@@ -119,6 +119,8 @@ The admin app is at **`/admin/`** on the same address (`https://mjkitchen.site/a
    Thomson:a-long-password, Mary:another-long-password
    ```
 
+   Pick type **Secret**, not **Text**: secrets are never shown again and always survive deploys. (`wrangler.toml` has `keep_vars = true`, so a Text variable is no longer wiped on deploy either, but its value stays visible in the dashboard.)
+
    One `name:password` pair per person, separated by commas. Passwords need at least 8 characters and can't contain commas. Names are what people type to sign in (capitals don't matter) and what the app shows next to every payment they confirm and every change they make.
 
 3. Open `/admin/` on your phone and sign in.
