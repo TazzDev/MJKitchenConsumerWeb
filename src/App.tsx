@@ -8,6 +8,7 @@ import { MenuPage } from './components/MenuPage'
 import { FindOrderPage, OrderPage } from './components/OrderPage'
 import { cartCount } from './menu'
 import { usePath } from './router'
+import { setMenuData, setPageMeta } from './seo'
 import type { MenuResponse } from './shared/types'
 
 export function App() {
@@ -25,6 +26,10 @@ export function App() {
     getMenu().then(setMenu, (e: Error) => setError(e.message))
   }
   useEffect(load, [])
+  useEffect(() => setPageMeta(path), [path])
+  useEffect(() => {
+    if (menu) setMenuData(menu)
+  }, [menu])
 
   // Remember where the visitor came from (?src=ig) for the order record.
   useEffect(() => {

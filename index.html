@@ -5,14 +5,43 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>MJ Kitchen · Homemade Kerala pickles and meals in Hyderabad</title>
     <meta name="description" content="Order MJ Kitchen's homemade Kerala-style chicken, fish and prawn pickles and pre-order pothichoru and biriyani, delivered in Hyderabad." />
+    <link rel="canonical" href="https://mjkitchen.site/" />
     <meta name="theme-color" content="#234734" />
     <link rel="icon" href="/favicon.ico" sizes="32x32" />
     <link rel="icon" type="image/png" href="/brand/icon-192.png" />
     <link rel="apple-touch-icon" href="/brand/icon-180.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <meta property="og:title" content="MJ Kitchen" />
-    <meta property="og:description" content="A taste of Kerala in Hyderabad. Homemade pickles and meals." />
-    <meta property="og:image" content="https://mjkitchen.site/brand/icon-512.png" />
+    <!-- Link previews on WhatsApp, Instagram, Facebook and X. These apps don't run JavaScript, so this all stays static. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="MJ Kitchen" />
+    <meta property="og:locale" content="en_IN" />
+    <meta property="og:url" content="https://mjkitchen.site/" />
+    <meta property="og:title" content="MJ Kitchen · A taste of Kerala in Hyderabad" />
+    <meta property="og:description" content="Homemade Kerala-style chicken, fish and prawn pickles, and pothichoru and biriyani to pre-order. Delivered in Hyderabad." />
+    <meta property="og:image" content="https://mjkitchen.site/brand/share.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="MJ Kitchen logo with the words A taste of Kerala in Hyderabad" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <!-- Business details for Google. src/seo.ts adds the live menu, prices and contacts from the database. -->
+    <script type="application/ld+json" id="ld-kitchen">
+      {
+        "@context": "https://schema.org",
+        "@type": "FoodEstablishment",
+        "@id": "https://mjkitchen.site/#kitchen",
+        "name": "MJ Kitchen",
+        "url": "https://mjkitchen.site/",
+        "logo": "https://mjkitchen.site/brand/icon-512.png",
+        "image": "https://mjkitchen.site/brand/share.jpg",
+        "description": "Homemade Kerala-style pickles and meals, delivered in Hyderabad.",
+        "servesCuisine": ["Kerala", "South Indian"],
+        "address": { "@type": "PostalAddress", "addressLocality": "Hyderabad", "addressRegion": "Telangana", "addressCountry": "IN" },
+        "areaServed": { "@type": "City", "name": "Hyderabad" },
+        "currenciesAccepted": "INR",
+        "paymentAccepted": "UPI"
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
