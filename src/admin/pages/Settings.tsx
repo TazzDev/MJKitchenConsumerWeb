@@ -1,5 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { SETTING_RULES, type EditableSetting } from '../../shared/admin'
+import { rupees } from '../../shared/money'
+import { PERSONAL_UPI_LINK_LIMIT_PAISE } from '../../shared/orders'
 import { api } from '../api'
 import { blockedHelp, currentSubscription, deviceName, pushSupport, subscribe } from '../push'
 import { Button, Card, ErrorBox, Label, Loading, Page, Toggle, toast, useAction, useLoad, when } from '../ui'
@@ -67,8 +69,11 @@ export function SettingsPage({ name, onSignOut }: { name: string; onSignOut: () 
         <div className="space-y-4">
           <ShopOpen values={s.data.settings} onSaved={(v) => s.setData({ settings: v })} />
           <PushAlerts />
-          {SECTIONS.map((sec) => (
-            <Section key={sec.title} title={sec.title} intro={sec.intro} fields={sec.fields} values={s.data!.settings} onSaved={(v) => s.setData({ settings: v })} />
+          {SECTIONS.map((sec, i) => (
+            <div key={sec.title} className="space-y-4">
+              <Section title={sec.title} intro={sec.intro} fields={sec.fields} values={s.data!.settings} onSaved={(v) => s.setData({ settings: v })} />
+              {i === 0 && <UpiBusiness values={s.data!.settings} onSaved={(v) => s.setData({ settings: v })} />}
+            </div>
           ))}
         </div>
       )}
@@ -202,6 +207,25 @@ function PushAlerts() {
           </ul>
         </div>
       )}
+    </Card>
+  )
+}
+
+function UpiBusiness({ values, onSaved }: { values: Values; onSaved: (v: Values) => void }) {
+  const { run } = useAction()
+  const business = values.upi_is_business === '1'
+  const save = async (on: boolean) => {
+    const out = await run('save', () => api.saveSettings({ upi_is_business: on ? '1' : '0' }), 'Saved')
+    if (out) onSaved(out.settings)
+  }
+  return (
+    <Card>
+      <Toggle checked={business} onChange={save} label="This is a business (merchant) UPI ID" />
+      <p className="mt-2 text-sm">
+        {business
+          ? 'The GPay, PhonePe and Paytm buttons show for every order.'
+          : `Payment apps block the GPay, PhonePe and Paytm buttons above ${rupees(PERSONAL_UPI_LINK_LIMIT_PAISE)} for a personal UPI ID, so bigger orders are asked to pay by UPI ID or QR instead. Turn this on once the UPI ID above is a business one (GPay, PhonePe or Paytm for Business).`}
+      </p>
     </Card>
   )
 }

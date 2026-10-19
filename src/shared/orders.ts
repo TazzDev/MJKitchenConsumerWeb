@@ -61,6 +61,14 @@ export function upiLink(payee: UpiPayee, amountPaise: number, code: string): str
   return 'upi://pay?' + q.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')
 }
 
+/**
+ * GPay, PhonePe and Paytm refuse payments above ₹2,000 that arrive through a
+ * upi:// link (the app buttons) when the UPI ID is a personal one. Paying by
+ * typing or pasting the UPI ID in the app isn't affected. A business (merchant)
+ * UPI ID has no such cap, so the limit goes away when admin marks it as one.
+ */
+export const PERSONAL_UPI_LINK_LIMIT_PAISE = 200_000
+
 export type UpiApp = 'gpay' | 'phonepe' | 'paytm'
 
 /**
@@ -151,7 +159,7 @@ export interface OrderView {
   utr: string | null
   hasScreenshot: boolean
   /** Present while the customer can pay. Always the current UPI settings. */
-  payment: (UpiPayee & { link: string }) | null
+  payment: (UpiPayee & { link: string; /** App buttons only work up to this amount; null when there's no cap. */ linkLimitPaise: number | null }) | null
   /** Whether "I've paid" can take a screenshot (needs the R2 bucket). */
   screenshotUpload: boolean
   history: { status: OrderStatus; at: string }[]

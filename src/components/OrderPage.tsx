@@ -141,6 +141,8 @@ const APPS: [UpiApp, string][] = [
 function PaymentPanel({ order, code, accessKey, onPaid }: { order: OrderView; code: string; accessKey: string; onPaid: (o: OrderView) => void }) {
   const pay = order.payment!
   const amount = rupees(order.totalPaise)
+  // Above the apps' cap for a personal UPI ID the app buttons always fail, so lead with the UPI ID instead.
+  const overLinkLimit = pay.linkLimitPaise !== null && order.totalPaise > pay.linkLimitPaise
   const [qr, setQr] = useState<string | null>(null)
   const [utr, setUtr] = useState('')
   const [file, setFile] = useState<File | null>(null)
@@ -220,29 +222,47 @@ function PaymentPanel({ order, code, accessKey, onPaid }: { order: OrderView; co
       </p>
 
       <Box title="1 · Pay">
-        <p className="text-sm font-semibold text-forest">Pay {amount} with</p>
-        <div className="grid grid-cols-3 gap-2">
-          {APPS.map(([app, label]) => (
-            <a
-              key={app}
-              href={upiAppLink(pay.link, app)}
-              onClick={openedApp}
-              className="rounded-2xl bg-forest px-2 py-3.5 text-center text-sm font-semibold text-cream shadow active:bg-forest-dark"
-            >
-              {label}
+        {overLinkLimit ? (
+          <>
+            <Notice>
+              Payment apps don't allow payment buttons for amounts over {rupees(pay.linkLimitPaise!)}. Please copy our UPI ID, then in your UPI
+              app choose <b>Pay to UPI ID</b>, paste it, and pay {amount} with the order number as the note.
+            </Notice>
+            <div className="mt-2 space-y-2 text-sm">
+              <CopyRow label="UPI ID" value={pay.upiId} copied={copied === 'id'} onCopy={() => copy('id', pay.upiId)} />
+              <CopyRow label="Amount" value={amount} copied={copied === 'amt'} onCopy={() => copy('amt', (order.totalPaise / 100).toFixed(2))} />
+              <CopyRow label="Note" value={order.code} copied={copied === 'code'} onCopy={() => copy('code', order.code)} />
+            </div>
+            <p className="text-xs">Paying by UPI ID? Please put the order number in the payment note so we can match it.</p>
+            <p className="text-xs">Or scan the QR below.</p>
+          </>
+        ) : (
+          <>
+            <p className="text-sm font-semibold text-forest">Pay {amount} with</p>
+            <div className="grid grid-cols-3 gap-2">
+              {APPS.map(([app, label]) => (
+                <a
+                  key={app}
+                  href={upiAppLink(pay.link, app)}
+                  onClick={openedApp}
+                  className="rounded-2xl bg-forest px-2 py-3.5 text-center text-sm font-semibold text-cream shadow active:bg-forest-dark"
+                >
+                  {label}
+                </a>
+              ))}
+            </div>
+            <a href={pay.link} onClick={openedApp} className="block rounded-2xl border border-forest py-3 text-center text-sm font-semibold text-forest">
+              Other UPI app
             </a>
-          ))}
-        </div>
-        <a href={pay.link} onClick={openedApp} className="block rounded-2xl border border-forest py-3 text-center text-sm font-semibold text-forest">
-          Other UPI app
-        </a>
-        <p className="text-xs">Opens the app with the amount and order number filled in. If nothing opens, use the QR below.</p>
-        {appStuck && (
-          <Notice>
-            Didn't open? {inApp ? `Instagram's browser sometimes blocks payment apps. Open this page in ${browserName} and try again, or ` : ''}
-            {inApp ? 'pay' : 'Pay'} with the QR or UPI ID below.
-            {inApp && <OpenInBrowser />}
-          </Notice>
+            <p className="text-xs">Opens the app with the amount and order number filled in. If nothing opens, use the QR below.</p>
+            {appStuck && (
+              <Notice>
+                Didn't open? {inApp ? `Instagram's browser sometimes blocks payment apps. Open this page in ${browserName} and try again, or ` : ''}
+                {inApp ? 'pay' : 'Pay'} with the QR or UPI ID below.
+                {inApp && <OpenInBrowser />}
+              </Notice>
+            )}
+          </>
         )}
 
         <div className="mt-2 rounded-2xl border border-earth/15 bg-white/60 p-3 text-center">
@@ -269,12 +289,16 @@ function PaymentPanel({ order, code, accessKey, onPaid }: { order: OrderView; co
           )}
         </div>
 
-        <div className="mt-2 space-y-2 text-sm">
-          <CopyRow label="UPI ID" value={pay.upiId} copied={copied === 'id'} onCopy={() => copy('id', pay.upiId)} />
-          <CopyRow label="Amount" value={amount} copied={copied === 'amt'} onCopy={() => copy('amt', (order.totalPaise / 100).toFixed(2))} />
-          <CopyRow label="Note" value={order.code} copied={copied === 'code'} onCopy={() => copy('code', order.code)} />
-        </div>
-        <p className="text-xs">Paying by UPI ID? Please put the order number in the payment note so we can match it.</p>
+        {!overLinkLimit && (
+          <>
+            <div className="mt-2 space-y-2 text-sm">
+              <CopyRow label="UPI ID" value={pay.upiId} copied={copied === 'id'} onCopy={() => copy('id', pay.upiId)} />
+              <CopyRow label="Amount" value={amount} copied={copied === 'amt'} onCopy={() => copy('amt', (order.totalPaise / 100).toFixed(2))} />
+              <CopyRow label="Note" value={order.code} copied={copied === 'code'} onCopy={() => copy('code', order.code)} />
+            </div>
+            <p className="text-xs">Paying by UPI ID? Please put the order number in the payment note so we can match it.</p>
+          </>
+        )}
         {inApp && !appStuck && (
           <p className="text-xs">
             Trouble paying inside Instagram? <OpenInBrowser inline />

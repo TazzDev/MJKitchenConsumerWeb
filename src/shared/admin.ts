@@ -147,6 +147,7 @@ export const EDITABLE_SETTINGS = [
   'shop_closed_message',
   'upi_id',
   'upi_payee_name',
+  'upi_is_business',
   'alert_email',
   'meal_cutoff_time',
   'meal_min_days_ahead',
@@ -170,6 +171,7 @@ export const SETTING_RULES: Record<EditableSetting, (v: string) => string | null
   shop_closed_message: (v) => (v.length <= 200 ? null : 'at most 200 characters'),
   upi_id: (v) => (v === '' || /^[\w.-]{2,}@[a-zA-Z][\w]{1,}$/.test(v) ? null : 'a UPI ID like name@oksbi'),
   upi_payee_name: (v) => (v.length <= 60 ? null : 'at most 60 characters'),
+  upi_is_business: (v) => (v === '' || v === '0' || v === '1' ? null : '0 or 1'),
   alert_email: (v) =>
     v === '' || v.split(',').every((e) => /^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/.test(e.trim())) ? null : 'email addresses separated by commas',
   meal_cutoff_time: (v) => (/^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? null : 'a time like 20:00'),
