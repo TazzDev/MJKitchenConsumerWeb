@@ -223,8 +223,8 @@ function UpiBusiness({ values, onSaved }: { values: Values; onSaved: (v: Values)
       <Toggle checked={business} onChange={save} label="This is a business (merchant) UPI ID" />
       <p className="mt-2 text-sm">
         {business
-          ? 'The GPay, PhonePe and Paytm buttons show for every order.'
-          : `Payment apps block the GPay, PhonePe and Paytm buttons above ${rupees(PERSONAL_UPI_LINK_LIMIT_PAISE)} for a personal UPI ID, so bigger orders are asked to pay by UPI ID or QR instead. Turn this on once the UPI ID above is a business one (GPay, PhonePe or Paytm for Business).`}
+          ? 'The payment page leads with the GPay, PhonePe and Paytm buttons.'
+          : `Payment apps often refuse the GPay, PhonePe and Paytm buttons for a personal UPI ID, so the payment page leads with paying by UPI ID and hides the buttons above ${rupees(PERSONAL_UPI_LINK_LIMIT_PAISE)}. Turn this on once the UPI ID above is a business one (GPay, PhonePe or Paytm for Business).`}
       </p>
     </Card>
   )
