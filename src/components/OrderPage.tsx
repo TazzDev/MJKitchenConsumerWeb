@@ -112,6 +112,9 @@ export function OrderPage({ code, shop }: { code: string; shop: ShopInfo | null 
             ? `${formatDate(order.deliveryDate)}, ${order.deliverySlot === 'lunch' ? 'lunch' : 'dinner'}`
             : 'Pickles are shipped the same day your payment is confirmed.'}
         </p>
+        {order.dateChanged && order.deliveryDate && (
+          <p className="mt-1 text-xs text-forest">Date changed to {formatDate(order.deliveryDate)}, as agreed with MJ Kitchen.</p>
+        )}
         <p className="mt-2 text-sm">
           {order.customerName}, {order.phone}
           <br />

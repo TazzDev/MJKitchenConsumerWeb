@@ -4,11 +4,13 @@
 
 import { Hono } from 'hono'
 import {
+  canChangeDate,
   canMove,
   EDITABLE_SETTINGS,
   ORDER_VIEWS,
   parsePincodes,
   PINCODE_LIST_RE,
+  planDateMove,
   PRODUCT_ICONS,
   SETTING_RULES,
   type AdminMenu,
@@ -19,17 +21,28 @@ import {
   type AdminZone,
   type DayAvailability,
   type EditableSetting,
+  type MoveCheckResult,
   type OrderListView,
   type ScheduleEntry,
 } from '../src/shared/admin'
-import { addDays, isIsoDate, istToday, weekday } from '../src/shared/dates'
+import { addDays, isDateOpen, isIsoDate, istToday, weekday } from '../src/shared/dates'
 import { rupees } from '../src/shared/money'
-import { ORDER_CODE_RE, type OrderStatus, type PaymentProof } from '../src/shared/orders'
+import {
+  dateMoveNote,
+  formatWhen,
+  isSlot,
+  movedExpiresAt,
+  ORDER_CODE_RE,
+  parseDateMove,
+  type MealWhen,
+  type OrderStatus,
+  type PaymentProof,
+} from '../src/shared/orders'
 import { SLOTS, type Category, type Slot } from '../src/shared/types'
 import { clearCookie, createSession, findUser, parseUsers, passwordMatches, readSessionCookie, sessionCookie, verifySession, type AdminUser } from './auth'
-import { loadSettings, type Env } from './db'
-import { kitchenDay, OrderError, transition } from './orders'
-import { parseSubscription, sendPush, vapidKeys } from './push'
+import { cutoffRule, loadSettings, shopInfo, type Env } from './db'
+import { DATE_CHANGED_SQL, isDateMoveEvent, kitchenDay, OrderError, transition } from './orders'
+import { dateChangedPush, parseSubscription, sendPush, vapidKeys } from './push'
 
 type Row = Record<string, unknown>
 type AdminEnv = { Bindings: Env; Variables: { user: AdminUser } }
@@ -109,7 +122,7 @@ const VIEW_ORDER: Record<OrderListView, string> = {
 }
 
 const SUMMARY_COLS = `o.public_code, o.status, o.payment_proof, o.customer_name, o.phone, o.total_paise, o.utr, o.has_meals,
-  o.delivery_date, o.delivery_slot, o.created_at, o.paid_at,
+  o.delivery_date, o.delivery_slot, o.created_at, o.paid_at, ${DATE_CHANGED_SQL} AS date_changed,
   (SELECT group_concat(i.qty || ' × ' || i.product_name_snapshot, ', ') FROM order_items i WHERE i.order_id = o.id) AS items_summary`
 
 function toSummary(r: Row): AdminOrderSummary {
@@ -127,6 +140,7 @@ function toSummary(r: Row): AdminOrderSummary {
     createdAt: String(r.created_at),
     paidAt: (r.paid_at as string | null) ?? null,
     itemsSummary: String(r.items_summary ?? ''),
+    dateChanged: Boolean(r.date_changed),
   }
 }
 
@@ -171,9 +185,11 @@ async function orderDetail(c: { env: Env; req: { url: string } }, row: Row): Pro
     db.prepare('SELECT * FROM order_events WHERE order_id = ? ORDER BY at, rowid').bind(row.id),
     db.prepare('SELECT name FROM delivery_zones WHERE id = ?').bind(row.zone_id),
   ])
+  const firstMove = events.results.filter(isDateMoveEvent).map((e) => parseDateMove(String(e.note ?? ''))).find(Boolean)
   const summary = toSummary({
     ...row,
     items_summary: items.results.map((i) => `${i.qty} × ${i.product_name_snapshot}`).join(', '),
+    date_changed: firstMove ? 1 : 0,
   })
   return {
     ...summary,
@@ -204,6 +220,8 @@ async function orderDetail(c: { env: Env; req: { url: string } }, row: Row): Pro
       note: String(e.note ?? ''),
       at: String(e.at),
     })),
+    originalDate: firstMove?.from ?? null,
+    canChangeDate: canChangeDate(row.status as OrderStatus, Boolean(row.has_meals)),
   }
 }
 
@@ -283,6 +301,189 @@ admin.post('/orders/:code/notes', async (c) => {
   const notes = typeof b.notes === 'string' ? b.notes.trim().slice(0, 1000) : ''
   await db.prepare('UPDATE orders SET admin_notes = ? WHERE id = ?').bind(notes, row.id).run()
   return c.json(await orderDetail(c, await orderRow(db, String(row.public_code))))
+})
+
+// ---------------------------------------------------------------------------
+// Changing an order's date (agreed with the customer on a call or WhatsApp)
+
+function currentWhen(row: Row): MealWhen {
+  return { date: String(row.delivery_date ?? ''), slot: (row.delivery_slot as Slot | null) ?? 'lunch' }
+}
+
+function readTarget(date: unknown, slot: unknown): MealWhen {
+  if (!isIsoDate(date) || !isSlot(slot)) throw bad('Pick a date and lunch or dinner.')
+  return { date, slot }
+}
+
+/** Works out what moving `row` to `target` would do, from the live portion counts. */
+async function checkMove(db: D1Database, row: Row, target: MealWhen, now: Date) {
+  const [settings, [items, schedule, avail]] = await Promise.all([
+    loadSettings(db),
+    db.batch<Row>([
+      db
+        .prepare(
+          `SELECT product_id, MIN(product_name_snapshot) AS name, SUM(qty) AS qty FROM order_items
+           WHERE order_id = ? AND category = 'meal' GROUP BY product_id ORDER BY MIN(rowid)`,
+        )
+        .bind(row.id),
+      db
+        .prepare(
+          `SELECT s.product_id, s.max_portions FROM meal_schedule s JOIN products p ON p.id = s.product_id
+           WHERE p.is_active = 1 AND p.category = 'meal' AND s.weekday = ? AND s.slot = ?`,
+        )
+        .bind(weekday(target.date), target.slot),
+      db.prepare('SELECT product_id, max_portions, booked_portions FROM meal_availability WHERE date = ? AND slot = ?').bind(target.date, target.slot),
+    ]),
+  ])
+  // Same rule as the storefront: the weekly schedule, unless the date has its own row.
+  const caps = new Map<string, [number, number]>()
+  for (const r of schedule.results) caps.set(String(r.product_id), [Number(r.max_portions), 0])
+  for (const r of avail.results) caps.set(String(r.product_id), [Number(r.max_portions), Number(r.booked_portions)])
+  const shop = shopInfo(settings)
+  const dishes = items.results.map((i) => {
+    const [max, booked] = caps.get(String(i.product_id)) ?? [0, 0]
+    return { productId: String(i.product_id), name: String(i.name), qty: Number(i.qty), max, booked }
+  })
+  const plan = planDateMove({
+    status: row.status as OrderStatus,
+    hasMeals: Boolean(row.has_meals),
+    current: currentWhen(row),
+    target,
+    today: istToday(now),
+    dishes,
+    mealSlot: [...caps.values()].some(([max]) => max > 0),
+    openForCustomers: isDateOpen(target.date, now, cutoffRule(shop)),
+    shopOpen: shop.open,
+    kitchenSheetLastDate: settings.kitchen_sheet_last_date ?? '',
+  })
+  const result: MoveCheckResult = {
+    plan,
+    dishes: dishes.map((d) => ({ name: d.name, qty: d.qty, left: d.max > 0 ? Math.max(0, d.max - d.booked) : null })),
+  }
+  return { plan, result, dishes, settings, shop }
+}
+
+admin.get('/orders/:code/date-check', async (c) => {
+  const row = await orderRow(c.env.DB, c.req.param('code'))
+  const { result } = await checkMove(c.env.DB, row, readTarget(c.req.query('date'), c.req.query('slot')), new Date())
+  return c.json(result)
+})
+
+admin.post('/orders/:code/date', async (c) => {
+  const db = c.env.DB
+  const row = await orderRow(db, c.req.param('code'))
+  const b = ((await c.req.json().catch(() => null)) ?? {}) as Row
+  const current = currentWhen(row)
+  const status = row.status as OrderStatus
+  // What the admin saw; if someone changed the order meanwhile, say so instead of acting on a stale screen.
+  if (b.fromStatus !== status || b.fromDate !== current.date || b.fromSlot !== current.slot) {
+    throw new OrderError(409, 'Someone else just changed this order. Check it again.')
+  }
+  const target = readTarget(b.date, b.slot)
+  const reason = str(b.reason, 200)
+  const overLimit = b.overLimit === true
+  const now = new Date()
+  const { plan, dishes, settings, shop } = await checkMove(db, row, target, now)
+  if (plan.error) throw bad(plan.error)
+  if (plan.short.length && !overLimit) {
+    const list = plan.short.map((s) => `${s.name}: ${s.left} left, needs ${s.need}`).join('; ')
+    throw new OrderError(409, `Not enough portions for ${formatWhen(target)} (${list}). Tick “go over the limit” to move it anyway.`)
+  }
+
+  const id = String(row.id)
+  const code = String(row.public_code)
+  const user = c.get('user').name
+  const at = now.toISOString()
+  // Every statement only acts while the order still has the status and date read above.
+  const stillKey = `${status}|${current.date}|${current.slot}`
+  const still = (idParam: number, keyParam: number) =>
+    `(SELECT status || '|' || delivery_date || '|' || delivery_slot FROM orders WHERE id = ?${idParam}) = ?${keyParam}`
+  const stmts: D1PreparedStatement[] = []
+
+  // An expired order's portions went back on sale when it lapsed.
+  if (status !== 'expired') {
+    stmts.push(
+      db
+        .prepare(
+          `UPDATE meal_availability
+           SET booked_portions = MAX(0, booked_portions - (SELECT SUM(i.qty) FROM order_items i
+             WHERE i.order_id = ?1 AND i.category = 'meal' AND i.product_id = meal_availability.product_id))
+           WHERE ${still(1, 2)} AND date = ?3 AND slot = ?4
+             AND product_id IN (SELECT product_id FROM order_items WHERE order_id = ?1 AND category = 'meal')`,
+        )
+        .bind(id, stillKey, current.date, current.slot),
+    )
+  }
+  for (const productId of plan.track) {
+    const qty = dishes.find((d) => d.productId === productId)?.qty ?? 0
+    stmts.push(
+      db
+        .prepare(
+          `INSERT INTO meal_availability (product_id, date, slot, max_portions, booked_portions)
+           SELECT product_id, ?2, slot, max_portions, 0 FROM meal_schedule WHERE product_id = ?1 AND weekday = ?3 AND slot = ?4
+           ON CONFLICT DO NOTHING`,
+        )
+        .bind(productId, target.date, weekday(target.date), target.slot),
+    )
+    if (overLimit) {
+      // Raise this date's limit just enough; the storefront still shows the slot as full.
+      stmts.push(
+        db
+          .prepare(
+            `UPDATE meal_availability SET max_portions = booked_portions + ?4, is_override = 1
+             WHERE product_id = ?1 AND date = ?2 AND slot = ?3 AND booked_portions + ?4 > max_portions AND ${still(5, 6)}`,
+          )
+          .bind(productId, target.date, target.slot, qty, id, stillKey),
+      )
+    }
+    // The meal_portions_guard trigger aborts the batch if this oversells.
+    stmts.push(
+      db
+        .prepare(`UPDATE meal_availability SET booked_portions = booked_portions + ?4 WHERE product_id = ?1 AND date = ?2 AND slot = ?3 AND ${still(5, 6)}`)
+        .bind(productId, target.date, target.slot, qty, id, stillKey),
+    )
+  }
+  if (overLimit && plan.short.length) {
+    const detail = `${plan.short.map((s) => s.name).join(', ')}, ${target.date} ${target.slot}: over the limit for ${code}`
+    stmts.push(
+      db
+        .prepare(`INSERT INTO admin_log (at, user, action, detail) SELECT ?3, ?4, 'Went over portion limit', ?5 WHERE ${still(1, 2)}`)
+        .bind(id, stillKey, at, user, detail.slice(0, 500)),
+    )
+  }
+  const note = dateMoveNote({ from: current, to: target, reason })
+  const expires = status === 'awaiting_payment' ? movedExpiresAt(now, Number(settings.unpaid_timeout_minutes) || 120, target.date, cutoffRule(shop)).toISOString() : null
+  stmts.push(
+    db
+      .prepare(
+        `INSERT INTO order_events (order_id, from_status, to_status, actor, note, at, by_user)
+         SELECT ?1, ?3, ?3, 'owner', ?4, ?5, ?6 WHERE ${still(1, 2)}`,
+      )
+      .bind(id, stillKey, status, note, at, user),
+    db
+      .prepare(
+        `UPDATE orders SET delivery_date = ?2, delivery_slot = ?3, updated_at = ?4, expires_at = COALESCE(?5, expires_at)
+         WHERE id = ?1 AND status = ?6 AND delivery_date = ?7 AND delivery_slot = ?8`,
+      )
+      .bind(id, target.date, target.slot, at, expires, status, current.date, current.slot),
+  )
+
+  let changed = 0
+  try {
+    const results = await db.batch(stmts)
+    changed = results.at(-1)?.meta.changes ?? 0
+  } catch (e) {
+    if (String((e as Error).message ?? e).includes('not_enough_portions')) {
+      throw new OrderError(409, `${formatWhen(target)} just filled up. Check again, or tick “go over the limit”.`)
+    }
+    throw e
+  }
+  if (!changed) throw new OrderError(409, 'Someone else just changed this order. Check it again.')
+
+  c.executionCtx.waitUntil(
+    sendPush(c.env, settings, new URL(c.req.url).origin, dateChangedPush(row, current, target, user, reason)).catch(console.error),
+  )
+  return c.json(await orderDetail(c, await orderRow(db, code)))
 })
 
 admin.get('/kitchen', async (c) => {

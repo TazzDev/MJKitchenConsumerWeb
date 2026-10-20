@@ -1,7 +1,7 @@
 import { addDays, formatDate, isIsoDate, istToday } from '../../shared/dates'
 import { rupees } from '../../shared/money'
 import { api } from '../api'
-import { Card, ErrorBox, go, Loading, Page, StatusBadge, useLoad, slotName } from '../ui'
+import { Card, DateChangedBadge, ErrorBox, go, Loading, Page, StatusBadge, useLoad, slotName } from '../ui'
 
 export function KitchenPage({ date: rawDate }: { date?: string }) {
   const today = istToday(new Date())
@@ -75,6 +75,11 @@ export function KitchenPage({ date: rawDate }: { date?: string }) {
                         <span className="text-xs">
                           {o.code} · {o.slot ? slotName(o.slot) : ''} · {rupees(o.totalPaise)}
                         </span>
+                        {o.dateChanged && (
+                          <span className="ml-1.5">
+                            <DateChangedBadge />
+                          </span>
+                        )}
                       </span>
                       <StatusBadge status={o.status} hasMeals={o.hasMeals} />
                     </a>

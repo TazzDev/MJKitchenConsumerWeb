@@ -1,8 +1,8 @@
 // Order rules shared by the API and the storefront: validation, UPI links,
 // expiry and the order states from the plan.
 
-import { closesAt, type CutoffRule } from './dates'
-import type { Slot } from './types'
+import { closesAt, formatDate, isIsoDate, type CutoffRule } from './dates'
+import { SLOTS, type Slot } from './types'
 
 export type OrderStatus =
   | 'awaiting_payment'
@@ -95,6 +95,52 @@ export function paymentProof(utr: string | null, screenshot: boolean): PaymentPr
   return 'none'
 }
 
+/**
+ * Unpaid order moved to another date by the owner: a fresh payment window from
+ * now, cut short by the new date's ordering cutoff only while that is still
+ * ahead (the owner may move an order inside the cutoff on purpose).
+ */
+export function movedExpiresAt(now: Date, timeoutMinutes: number, mealDate: string, rule: CutoffRule): Date {
+  const byTimeout = now.getTime() + Math.max(10, timeoutMinutes) * 60_000
+  const closes = closesAt(mealDate, rule).getTime()
+  return new Date(closes > now.getTime() ? Math.min(byTimeout, closes) : byTimeout)
+}
+
+// A date change is logged as an order event that keeps the status
+// (from_status = to_status), with the old and new date in its note.
+
+export interface MealWhen {
+  date: string
+  slot: Slot
+}
+
+export interface DateMove {
+  from: MealWhen
+  to: MealWhen
+  reason: string
+}
+
+const MOVE_PREFIX = 'Date changed: '
+const MOVE_RE = /^Date changed: (\d{4}-\d{2}-\d{2}) (lunch|dinner) → (\d{4}-\d{2}-\d{2}) (lunch|dinner)(?: · ([\s\S]*))?$/
+
+export function dateMoveNote(m: DateMove): string {
+  const reason = m.reason.trim()
+  return `${MOVE_PREFIX}${m.from.date} ${m.from.slot} → ${m.to.date} ${m.to.slot}${reason ? ` · ${reason}` : ''}`
+}
+
+export function parseDateMove(note: string): DateMove | null {
+  const m = MOVE_RE.exec(note)
+  if (!m || !isIsoDate(m[1]) || !isIsoDate(m[3])) return null
+  return { from: { date: m[1], slot: m[2] as Slot }, to: { date: m[3], slot: m[4] as Slot }, reason: m[5] ?? '' }
+}
+
+export const isSlot = (v: unknown): v is Slot => SLOTS.includes(v as Slot)
+
+/** "Sun, 25 Oct dinner" */
+export function formatWhen(w: MealWhen): string {
+  return `${formatDate(w.date)} ${w.slot}`
+}
+
 export const STATUS_LABEL: Record<OrderStatus, string> = {
   awaiting_payment: 'Waiting for payment',
   payment_submitted: 'Checking your payment',
@@ -155,4 +201,6 @@ export interface OrderView {
   /** Whether "I've paid" can take a screenshot (needs the R2 bucket). */
   screenshotUpload: boolean
   history: { status: OrderStatus; at: string }[]
+  /** Set when MJ Kitchen moved the order to another date (the latest move). */
+  dateChanged: { at: string } | null
 }

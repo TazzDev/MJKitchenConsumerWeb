@@ -3,7 +3,7 @@ import { ORDER_VIEWS, type AdminOrderSummary, type AdminSummary, type OrderListV
 import { formatDate } from '../../shared/dates'
 import { rupees } from '../../shared/money'
 import { api } from '../api'
-import { ago, Button, Card, ErrorBox, go, Loading, Page, StatusBadge, toast, useAction, useLoad, when, slotName } from '../ui'
+import { ago, Button, Card, DateChangedBadge, ErrorBox, go, Loading, Page, StatusBadge, toast, useAction, useLoad, when, slotName } from '../ui'
 
 const VIEW_LABEL: Record<OrderListView, string> = {
   check: 'To check',
@@ -122,6 +122,12 @@ function OrderCard({ o, onConfirm, busy }: { o: AdminOrderSummary; onConfirm?: (
         <p className="mt-2 line-clamp-2 text-sm">{o.itemsSummary}</p>
         <p className="mt-1 text-xs font-semibold">
           {o.deliveryDate && o.deliverySlot ? `${formatDate(o.deliveryDate)}, ${slotName(o.deliverySlot)}` : 'Pickles: ship once paid'}
+          {o.dateChanged && (
+            <>
+              {' '}
+              <DateChangedBadge />
+            </>
+          )}
         </p>
         {o.status === 'payment_submitted' && (
           <p className="mt-2 text-sm">
