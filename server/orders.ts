@@ -9,6 +9,7 @@ import {
   orderCode,
   PAYABLE,
   paymentProof,
+  PERSONAL_UPI_LINK_LIMIT_PAISE,
   PHONE_RE,
   STATUS_LABEL,
   upiLink,
@@ -294,7 +295,14 @@ export async function orderView(env: Env, row: Row): Promise<OrderView> {
     utr: (row.utr as string | null) ?? null,
     hasScreenshot: Boolean(row.screenshot_key),
     // Always the current settings, so a changed UPI ID shows up on open orders too.
-    payment: PAYABLE.includes(status) && payee.upiId && payee.payeeName ? { ...payee, link: upiLink(payee, total, code) } : null,
+    payment:
+      PAYABLE.includes(status) && payee.upiId && payee.payeeName
+        ? {
+            ...payee,
+            link: upiLink(payee, total, code),
+            linkLimitPaise: settings.upi_is_business === '1' ? null : PERSONAL_UPI_LINK_LIMIT_PAISE,
+          }
+        : null,
     screenshotUpload: Boolean(env.SCREENSHOTS),
     // Date changes keep the status, so they stay out of the status timeline.
     history: events.results.filter((e) => !isDateMoveEvent(e)).map((e) => ({ status: e.to_status as OrderStatus, at: String(e.at) })),

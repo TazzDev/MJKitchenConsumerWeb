@@ -61,6 +61,14 @@ export function upiLink(payee: UpiPayee, amountPaise: number, code: string): str
   return 'upi://pay?' + q.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')
 }
 
+/**
+ * For a personal UPI ID, payment apps treat a upi:// link (our app buttons) like
+ * a QR picked from the gallery: PhonePe caps that at ₹2,000 and can refuse it
+ * at lower amounts too. Paying by typing the UPI ID isn't affected. A business
+ * (merchant) UPI ID has no such cap; admin marks it as one in Settings.
+ */
+export const PERSONAL_UPI_LINK_LIMIT_PAISE = 200_000
+
 export type UpiApp = 'gpay' | 'phonepe' | 'paytm'
 
 /**
@@ -197,7 +205,7 @@ export interface OrderView {
   utr: string | null
   hasScreenshot: boolean
   /** Present while the customer can pay. Always the current UPI settings. */
-  payment: (UpiPayee & { link: string }) | null
+  payment: (UpiPayee & { link: string; /** App buttons only work up to this amount; null when there's no cap. */ linkLimitPaise: number | null }) | null
   /** Whether "I've paid" can take a screenshot (needs the R2 bucket). */
   screenshotUpload: boolean
   history: { status: OrderStatus; at: string }[]
