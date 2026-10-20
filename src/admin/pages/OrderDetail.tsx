@@ -1,10 +1,11 @@
-import { useState } from 'react'
-import { OWNER_MOVES, ownerStatusLabel, type AdminOrderDetail } from '../../shared/admin'
-import { formatDate } from '../../shared/dates'
+import { useEffect, useState } from 'react'
+import { OWNER_MOVES, ownerStatusLabel, type AdminOrderDetail, type MoveCheckResult } from '../../shared/admin'
+import { formatDate, istToday } from '../../shared/dates'
 import { rupees } from '../../shared/money'
-import type { OrderStatus } from '../../shared/orders'
+import { formatWhen, parseDateMove, type OrderStatus } from '../../shared/orders'
+import type { Slot } from '../../shared/types'
 import { api } from '../api'
-import { Button, Card, ErrorBox, go, Loading, Page, StatusBadge, useAction, useLoad, when, slotName } from '../ui'
+import { Button, Card, DateChangedBadge, ErrorBox, go, Loading, Page, StatusBadge, useAction, useLoad, when, slotName } from '../ui'
 
 const REJECT_REASONS = ['Payment not found in UPI app', 'Amount paid is different', 'UTR doesn’t match']
 
@@ -12,6 +13,7 @@ export function OrderDetailPage({ code }: { code: string }) {
   const order = useLoad(() => api.order(code), [code], { refreshMs: 30_000 })
   const { busy, run } = useAction()
   const [rejecting, setRejecting] = useState(false)
+  const [changingDate, setChangingDate] = useState(false)
 
   if (order.error) return <Page title={code}><ErrorBox error={order.error} onRetry={() => order.reload()} /></Page>
   if (!order.data) return <Page title={code}><Loading /></Page>
@@ -51,6 +53,12 @@ export function OrderDetailPage({ code }: { code: string }) {
                 {formatDate(o.deliveryDate)}
                 <br />
                 {slotName(o.deliverySlot)}
+                {o.originalDate && (
+                  <span className="mt-1 block">
+                    <DateChangedBadge />
+                    <span className="mt-0.5 block text-xs font-normal">was {formatWhen(o.originalDate)}</span>
+                  </span>
+                )}
               </>
             ) : (
               'Pickles only'
@@ -75,7 +83,7 @@ export function OrderDetailPage({ code }: { code: string }) {
         )}
         {o.status === 'awaiting_payment' && o.expiresAt && <p className="mt-2 text-xs">Expires {when(o.expiresAt)} if not paid.</p>}
 
-        {moves.length > 0 && (
+        {(moves.length > 0 || o.canChangeDate) && (
           <div className="mt-4 grid gap-2">
             {moves.includes('confirmed') && (
               <Button onClick={() => move('confirmed')} busy={busy === 'confirmed'} className="py-3 text-base">
@@ -113,6 +121,20 @@ export function OrderDetailPage({ code }: { code: string }) {
               ) : (
                 <Button tone="danger" onClick={() => setRejecting(true)}>
                   Not received ✗
+                </Button>
+              ))}
+            {o.canChangeDate &&
+              (changingDate ? (
+                <ChangeDate
+                  o={o}
+                  onDone={(fresh) => {
+                    if (fresh) order.setData(fresh)
+                    setChangingDate(false)
+                  }}
+                />
+              ) : (
+                <Button tone="plain" onClick={() => setChangingDate(true)}>
+                  Change date
                 </Button>
               ))}
             {moves.includes('cancelled') && (
@@ -169,16 +191,25 @@ export function OrderDetailPage({ code }: { code: string }) {
       <Card className="mt-3">
         <p className="mb-2 text-sm font-semibold text-forest">History</p>
         <ol className="space-y-1.5 text-sm">
-          {o.events.map((e, n) => (
-            <li key={n}>
-              <span className="text-xs">{when(e.at)}</span> · {e.from === null ? 'Order placed' : ownerStatusLabel(e.to, o.hasMeals)}
-              <span className="text-xs">
-                {' '}
-                by {e.byUser ?? (e.actor === 'customer' ? 'customer' : e.actor === 'system' ? 'system' : 'owner')}
-              </span>
-              {e.note && <span className="block text-xs italic">{e.note}</span>}
-            </li>
-          ))}
+          {o.events.map((e, n) => {
+            const moved = e.from === e.to ? parseDateMove(e.note) : null
+            const note = moved ? moved.reason : e.note
+            return (
+              <li key={n}>
+                <span className="text-xs">{when(e.at)}</span> ·{' '}
+                {moved
+                  ? `Date changed: ${formatWhen(moved.from)} → ${formatWhen(moved.to)}`
+                  : e.from === null
+                    ? 'Order placed'
+                    : ownerStatusLabel(e.to, o.hasMeals)}
+                <span className="text-xs">
+                  {' '}
+                  by {e.byUser ?? (e.actor === 'customer' ? 'customer' : e.actor === 'system' ? 'system' : 'owner')}
+                </span>
+                {note && <span className="block text-xs italic">{note}</span>}
+              </li>
+            )
+          })}
         </ol>
       </Card>
     </Page>
@@ -197,6 +228,9 @@ function WhatsAppTemplates({ o, firstName }: { o: AdminOrderDetail; firstName: s
   }
   if (['confirmed', 'preparing'].includes(o.status)) {
     templates.push(['Confirmed', `Hi ${firstName}, we've received your payment of ${total}. Your MJ Kitchen order ${o.code}${when} is confirmed. Track it here: ${o.statusUrl}`])
+  }
+  if (o.dateChanged && o.deliveryDate && o.deliverySlot && !['out_for_delivery', 'delivered', 'cancelled'].includes(o.status)) {
+    templates.push(['Date changed', `Hi ${firstName}, as we discussed, your MJ Kitchen order ${o.code} is now for ${formatWhen({ date: o.deliveryDate, slot: o.deliverySlot })}. Track it here: ${o.statusUrl}`])
   }
   if (o.status === 'out_for_delivery') {
     templates.push([o.hasMeals ? 'On the way' : 'Shipped', `Hi ${firstName}, your MJ Kitchen order ${o.code} is on its way! Track it here: ${o.statusUrl}`])
@@ -248,5 +282,105 @@ function Notes({ o, onSaved }: { o: AdminOrderDetail; onSaved: (o: AdminOrderDet
         </Button>
       )}
     </Card>
+  )
+}
+
+/** Move a meal order to another date and slot, as agreed with the customer. */
+function ChangeDate({ o, onDone }: { o: AdminOrderDetail; onDone: (fresh?: AdminOrderDetail) => void }) {
+  const today = istToday(new Date())
+  const [date, setDate] = useState(o.deliveryDate && o.deliveryDate >= today ? o.deliveryDate : today)
+  const [slot, setSlot] = useState<Slot>(o.deliverySlot ?? 'lunch')
+  const [reason, setReason] = useState('')
+  const [overLimit, setOverLimit] = useState(false)
+  const [check, setCheck] = useState<{ key: string; result?: MoveCheckResult; error?: string } | null>(null)
+  const { busy, run } = useAction()
+  const key = `${date}|${slot}`
+  const same = date === o.deliveryDate && slot === o.deliverySlot
+
+  useEffect(() => {
+    if (!date || same) return
+    let live = true
+    setOverLimit(false)
+    api.dateCheck(o.code, date, slot).then(
+      (result) => live && setCheck({ key, result }),
+      (e: Error) => live && setCheck({ key, error: e.message }),
+    )
+    return () => {
+      live = false
+    }
+  }, [o.code, date, slot, same, key])
+
+  const current = check?.key === key ? check : null
+  const plan = current?.result?.plan
+  const canSave = !same && !!plan && !plan.error && (plan.short.length === 0 || overLimit)
+
+  const save = async () => {
+    const fresh = await run(
+      'date',
+      () => api.changeDate(o.code, { fromStatus: o.status, fromDate: o.deliveryDate ?? '', fromSlot: o.deliverySlot ?? 'lunch', date, slot, reason, overLimit }),
+      `Moved to ${formatWhen({ date, slot })}`,
+    )
+    if (fresh) onDone(fresh)
+  }
+
+  return (
+    <div className="space-y-3 rounded-xl border border-earth/30 p-3">
+      <p className="text-sm font-semibold text-forest">Move to another date</p>
+      <input type="date" className="field" min={today} value={date} onChange={(e) => setDate(e.target.value)} />
+      <div className="grid grid-cols-2 gap-2">
+        {(['lunch', 'dinner'] as Slot[]).map((s) => (
+          <Button key={s} tone={slot === s ? 'primary' : 'plain'} onClick={() => setSlot(s)}>
+            {slotName(s)}
+          </Button>
+        ))}
+      </div>
+      {same ? (
+        <p className="text-xs">That’s the order’s current date. Pick another date or slot.</p>
+      ) : !current ? (
+        <p className="text-xs">Checking portions…</p>
+      ) : current.error ? (
+        <p className="text-sm text-spice">{current.error}</p>
+      ) : plan?.error ? (
+        <p className="text-sm font-semibold text-spice">{plan.error}</p>
+      ) : (
+        <>
+          <ul className="space-y-0.5 text-sm">
+            {current.result!.dishes.map((d) => (
+              <li key={d.name} className="flex justify-between gap-2">
+                <span>
+                  <b>{d.qty} ×</b> {d.name}
+                </span>
+                <span className={'text-xs ' + (d.left !== null && d.left < d.qty ? 'font-semibold text-spice' : '')}>
+                  {d.left === null ? 'not on the menu then' : `${d.left} left`}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {plan!.warnings.map((w) => (
+            <p key={w} className="rounded-lg bg-gold/15 px-2 py-1 text-xs">
+              {w}
+            </p>
+          ))}
+          {plan!.short.length > 0 && (
+            <label className="flex items-start gap-2 rounded-lg bg-spice/10 px-2 py-1.5 text-sm text-spice">
+              <input type="checkbox" className="mt-0.5" checked={overLimit} onChange={(e) => setOverLimit(e.target.checked)} />
+              <span>
+                <b>Go over the limit for this order.</b> Not enough portions left for {plan!.short.map((s) => s.name).join(', ')}. The limit for this date is
+                raised just enough, and customers still see it as full.
+              </span>
+            </label>
+          )}
+        </>
+      )}
+      <input className="field" maxLength={200} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (optional), e.g. customer called" />
+      <div className="grid grid-cols-2 gap-2">
+        <Button tone="plain" onClick={() => onDone()}>
+          Back
+        </Button>
+        <Button onClick={save} busy={busy === 'date'} disabled={!canSave}>
+          Move order
+        </Button>
+      </div>
+    </div>
   )
 }

@@ -196,6 +196,10 @@ export function StatusBadge({ status, hasMeals }: { status: OrderStatus; hasMeal
   return <span className={'inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ' + STATUS_TONE[status]}>{ownerStatusLabel(status, hasMeals)}</span>
 }
 
+export function DateChangedBadge() {
+  return <span className="inline-block rounded-full bg-gold/25 px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-forest-dark">Date changed</span>
+}
+
 export function ErrorBox({ error, onRetry }: { error: string; onRetry?: () => void }) {
   return (
     <div role="alert" className="rounded-xl border border-spice/40 bg-spice/8 px-4 py-3 text-sm text-spice">
