@@ -7,6 +7,7 @@ import type {
   DayAvailability,
   EditableSetting,
   KitchenDay,
+  MoveCheckResult,
   OrderListView,
   ScheduleEntry,
 } from '../shared/admin'
@@ -61,6 +62,9 @@ export const api = {
   setStatus: (code: string, from: OrderStatus, to: OrderStatus, note = '') =>
     request<AdminOrderDetail>(`/orders/${encodeURIComponent(code)}/status`, send('POST', { from, to, note })),
   setNotes: (code: string, notes: string) => request<AdminOrderDetail>(`/orders/${encodeURIComponent(code)}/notes`, send('POST', { notes })),
+  dateCheck: (code: string, date: string, slot: Slot) =>
+    request<MoveCheckResult>(`/orders/${encodeURIComponent(code)}/date-check?date=${date}&slot=${slot}`),
+  changeDate: (code: string, body: ChangeDateBody) => request<AdminOrderDetail>(`/orders/${encodeURIComponent(code)}/date`, send('POST', body)),
   kitchen: (date: string) => request<KitchenDay>(`/kitchen?date=${date}`),
 
   menu: () => request<AdminMenu>('/menu'),
@@ -121,4 +125,15 @@ export interface PushDevice {
   user: string
   device: string
   since: string
+}
+
+export interface ChangeDateBody {
+  /** What the admin saw, so a change made meanwhile isn't overwritten. */
+  fromStatus: OrderStatus
+  fromDate: string
+  fromSlot: Slot
+  date: string
+  slot: Slot
+  reason: string
+  overLimit: boolean
 }

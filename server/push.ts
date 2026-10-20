@@ -7,6 +7,7 @@
 
 import { formatDate } from '../src/shared/dates'
 import { rupees } from '../src/shared/money'
+import { formatWhen, type MealWhen } from '../src/shared/orders'
 import { slotLabel } from '../src/shared/quote'
 import type { Env } from './db'
 import type { CreatedOrder } from './orders'
@@ -270,6 +271,16 @@ export function paidPush(row: Row, utr: string): PushMessage {
   return {
     title: `Check payment · ${rupees(Number(row.total_paise))} · ${row.customer_name}`,
     body: `${row.customer_name} says they've paid for ${code}. ${utr ? `UPI ref ${utr}.` : 'No reference: match by amount and time.'}`,
+    url: orderUrl(code),
+    tag: code,
+  }
+}
+
+export function dateChangedPush(row: Row, from: MealWhen, to: MealWhen, user: string, reason: string): PushMessage {
+  const code = String(row.public_code)
+  return {
+    title: `Date changed · ${code} · ${row.customer_name}`,
+    body: `${formatWhen(from)} → ${formatWhen(to)}, by ${user}${reason ? `\n${reason}` : ''}`,
     url: orderUrl(code),
     tag: code,
   }

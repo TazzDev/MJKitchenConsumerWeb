@@ -262,13 +262,14 @@ export async function orderView(env: Env, row: Row): Promise<OrderView> {
   const db = env.DB
   const [items, events, settings] = await Promise.all([
     db.prepare('SELECT * FROM order_items WHERE order_id = ? ORDER BY rowid').bind(row.id).all<Row>(),
-    db.prepare('SELECT to_status, at FROM order_events WHERE order_id = ? ORDER BY at, rowid').bind(row.id).all<Row>(),
+    db.prepare('SELECT from_status, to_status, at FROM order_events WHERE order_id = ? ORDER BY at, rowid').bind(row.id).all<Row>(),
     loadSettings(db),
   ])
   const status = row.status as OrderStatus
   const code = String(row.public_code)
   const total = Number(row.total_paise)
   const payee = { upiId: settings.upi_id?.trim() ?? '', payeeName: settings.upi_payee_name?.trim() ?? '' }
+  const lastMove = events.results.filter(isDateMoveEvent).at(-1)
   return {
     code,
     status,
@@ -303,9 +304,17 @@ export async function orderView(env: Env, row: Row): Promise<OrderView> {
           }
         : null,
     screenshotUpload: Boolean(env.SCREENSHOTS),
-    history: events.results.map((e) => ({ status: e.to_status as OrderStatus, at: String(e.at) })),
+    // Date changes keep the status, so they stay out of the status timeline.
+    history: events.results.filter((e) => !isDateMoveEvent(e)).map((e) => ({ status: e.to_status as OrderStatus, at: String(e.at) })),
+    dateChanged: lastMove ? { at: String(lastMove.at) } : null,
   }
 }
+
+/** A date change by the owner: logged as an event that keeps the status. */
+export const isDateMoveEvent = (e: Row) => e.from_status !== null && e.from_status === e.to_status
+
+/** SQL for "this order has been moved to another date", on orders aliased `o`. */
+export const DATE_CHANGED_SQL = `EXISTS (SELECT 1 FROM order_events e WHERE e.order_id = o.id AND e.from_status = e.to_status)`
 
 // ---------------------------------------------------------------------------
 // Status changes
@@ -474,7 +483,8 @@ export async function maybeSendKitchenSheet(env: Env, now = new Date()): Promise
 /** What to cook for a date: dish totals per slot, and the orders behind them. */
 export async function kitchenDay(db: D1Database, date: string): Promise<KitchenDay> {
   const [orders, items] = await db.batch<Row>([
-    db.prepare(`SELECT * FROM orders WHERE delivery_date = ?1 AND status IN (SELECT value FROM json_each(?2)) ORDER BY delivery_slot, created_at`)
+    db.prepare(`SELECT o.*, ${DATE_CHANGED_SQL} AS date_changed FROM orders o
+                WHERE o.delivery_date = ?1 AND o.status IN (SELECT value FROM json_each(?2)) ORDER BY o.delivery_slot, o.created_at`)
       .bind(date, JSON.stringify(COOKING)),
     db.prepare(
       `SELECT o.delivery_slot AS slot, i.product_name_snapshot AS name, i.category, SUM(i.qty) AS qty,
@@ -502,6 +512,7 @@ export async function kitchenDay(db: D1Database, date: string): Promise<KitchenD
       totalPaise: Number(o.total_paise),
       status: o.status as OrderStatus,
       hasMeals: Boolean(o.has_meals),
+      dateChanged: Boolean(o.date_changed),
     })),
   }
 }
@@ -522,7 +533,7 @@ export async function kitchenSheet(db: D1Database, date: string) {
   if (day.orders.length) {
     lines.push('Orders')
     for (const o of day.orders) {
-      lines.push(`  ${o.code} · ${o.slot} · ${o.customerName} · ${o.phone} · ${rupees(o.totalPaise)} · ${STATUS_LABEL[o.status]}`)
+      lines.push(`  ${o.code} · ${o.slot} · ${o.customerName} · ${o.phone} · ${rupees(o.totalPaise)} · ${STATUS_LABEL[o.status]}${o.dateChanged ? ' · date changed' : ''}`)
     }
     lines.push('')
   }
